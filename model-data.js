@@ -2,8 +2,8 @@
 window.HSV2_MODELS = {
   "schemaVersion": "2.0.0",
   "metadata": {
-    "title": "HSV-2 five-model information-tier risk models",
-    "artifactVersion": "attempt7-five-model-2026-07",
+    "title": "HSV-2 four-variable benchmark and information-tier risk models",
+    "artifactVersion": "attempt7-four-variable-baseline-2026-07",
     "algorithms": ["Population-weighted logistic regression", "XGBoost"],
     "outcome": "HSV-2 seropositivity on NHANES serology",
     "eligibility": {
@@ -28,6 +28,7 @@ window.HSV2_MODELS = {
       }
     },
     "weighting": "Pooled NHANES Mobile Examination Center weights; fitting and reported validation metrics are population weighted.",
+    "comparisonNotice": "Baseline-LR uses four inputs; XGBoost Model 1 additionally uses partnership status and poverty-income ratio. Their contrast is not a same-predictor test of algorithmic superiority.",
     "adaptiveThreshold": {
       "algorithm": "XGBoost",
       "basedOnModel": "xgb_model3",
@@ -342,6 +343,64 @@ window.HSV2_MODELS = {
     }
   },
   "preprocessors": {
+    "baseline": {
+      "id": "baseline",
+      "tier": 1,
+      "featureNames": ["age", "age_squared", "age_missing", "age_squared_missing", "sexFemale", "sexUnknown", "race_ethnicityNon.Hispanic.Black", "race_ethnicityMexican.American", "race_ethnicityOther.Hispanic", "race_ethnicityOther.multiracial", "race_ethnicityUnknown", "educationSome.college.AA", "educationHigh.school.GED", "education9th.11th.grade", "educationLess.than.9th.grade", "educationUnknown"],
+      "numericInputs": {
+        "age": {
+          "valueFeature": "age",
+          "missingFeature": "age_missing",
+          "median": 36,
+          "derivedTerms": [
+            {
+              "feature": "age_squared",
+              "missingFeature": "age_squared_missing",
+              "median": 64,
+              "transform": {
+                "type": "centeredSquare",
+                "center": 35
+              }
+            }
+          ]
+        }
+      },
+      "categoricalInputs": {
+        "sex": {
+          "reference": "Male",
+          "unknownLevel": "Unknown",
+          "levels": ["Male", "Female", "Unknown"],
+          "featureByLevel": {
+            "Female": "sexFemale",
+            "Unknown": "sexUnknown"
+          }
+        },
+        "race_ethnicity": {
+          "reference": "Non-Hispanic White",
+          "unknownLevel": "Unknown",
+          "levels": ["Non-Hispanic White", "Non-Hispanic Black", "Mexican American", "Other Hispanic", "Other/multiracial", "Unknown"],
+          "featureByLevel": {
+            "Non-Hispanic Black": "race_ethnicityNon.Hispanic.Black",
+            "Mexican American": "race_ethnicityMexican.American",
+            "Other Hispanic": "race_ethnicityOther.Hispanic",
+            "Other/multiracial": "race_ethnicityOther.multiracial",
+            "Unknown": "race_ethnicityUnknown"
+          }
+        },
+        "education": {
+          "reference": "College graduate or above",
+          "unknownLevel": "Unknown",
+          "levels": ["College graduate or above", "Some college/AA", "High school/GED", "9th-11th grade", "Less than 9th grade", "Unknown"],
+          "featureByLevel": {
+            "Some college/AA": "educationSome.college.AA",
+            "High school/GED": "educationHigh.school.GED",
+            "9th-11th grade": "education9th.11th.grade",
+            "Less than 9th grade": "educationLess.than.9th.grade",
+            "Unknown": "educationUnknown"
+          }
+        }
+      }
+    },
     "tier1": {
       "id": "tier1",
       "tier": 1,
@@ -952,21 +1011,21 @@ window.HSV2_MODELS = {
       "tier": 1,
       "algorithm": "Population-weighted logistic regression",
       "role": "reference",
-      "description": "Reference logistic model using the six baseline demographic and socioeconomic inputs.",
-      "inputCount": 6,
-      "preprocessorId": "tier1",
+      "description": "Minimal logistic benchmark using age, sex, race/ethnicity, and education; no partnership or income input.",
+      "inputCount": 4,
+      "preprocessorId": "baseline",
       "scoring": {
         "kind": "logistic",
-        "intercept": -5.302558417159,
+        "intercept": -5.429174190192,
         "numericCoefficients": {
           "age": {
-            "coefficient": 0.076979879452,
+            "coefficient": 0.068865490397,
             "missingCoefficient": 0,
             "median": 36,
             "derivedTerms": [
               {
                 "id": "age_squared",
-                "coefficient": -0.00319201467,
+                "coefficient": -0.002804647547,
                 "missingCoefficient": 0,
                 "median": 64,
                 "transform": {
@@ -975,11 +1034,6 @@ window.HSV2_MODELS = {
                 }
               }
             ]
-          },
-          "pir": {
-            "coefficient": -0.125166238562,
-            "missingCoefficient": -0.109101002752,
-            "median": 3
           }
         },
         "categoricalContributions": {
@@ -987,7 +1041,7 @@ window.HSV2_MODELS = {
             "reference": "Male",
             "levels": {
               "Male": 0,
-              "Female": 0.839745013482,
+              "Female": 0.861465621201,
               "Unknown": 0
             }
           },
@@ -995,10 +1049,10 @@ window.HSV2_MODELS = {
             "reference": "Non-Hispanic White",
             "levels": {
               "Non-Hispanic White": 0,
-              "Non-Hispanic Black": 1.670134802823,
-              "Mexican American": -0.203784112813,
-              "Other Hispanic": 0.669739967248,
-              "Other/multiracial": 0.172095902398,
+              "Non-Hispanic Black": 1.803309039839,
+              "Mexican American": -0.134594128689,
+              "Other Hispanic": 0.766924094309,
+              "Other/multiracial": 0.221241038692,
               "Unknown": 0
             }
           },
@@ -1006,19 +1060,11 @@ window.HSV2_MODELS = {
             "reference": "College graduate or above",
             "levels": {
               "College graduate or above": 0,
-              "Some college/AA": 0.634675689975,
-              "High school/GED": 0.739664550981,
-              "9th-11th grade": 0.977195647313,
-              "Less than 9th grade": 1.086097223604,
-              "Unknown": -11.013785375436
-            }
-          },
-          "partnership": {
-            "reference": "Married/living with partner",
-            "levels": {
-              "Married/living with partner": 0,
-              "Not partnered": 0.372903690233,
-              "Unknown": 0.602256769003
+              "Some college/AA": 0.761058964932,
+              "High school/GED": 0.908089873792,
+              "9th-11th grade": 1.218588667171,
+              "Less than 9th grade": 1.310710812465,
+              "Unknown": -10.909323232709
             }
           }
         }
@@ -1028,112 +1074,112 @@ window.HSV2_MODELS = {
         "n": 4347,
         "events": 718,
         "weightedPrevalence": 0.126939358825,
-        "aurocWeighted": 0.791970629992,
-        "cIndexWeighted": 0.791970629992,
-        "aurocUnweighted": 0.79453523957,
-        "aurocUnweightedCi": [0.776984046133, 0.812086433008],
-        "averagePrecisionWeighted": 0.399088685443,
-        "brierWeighted": 0.094407653124,
-        "calibrationIntercept": -0.359280096641,
-        "calibrationSlope": 1.064162307877,
-        "top20Threshold": 0.249934811366,
-        "top20Sensitivity": 0.552219490459,
-        "top20Specificity": 0.851180175356,
-        "top20Ppv": 0.350444420732,
-        "top20Npv": 0.928946377851
+        "aurocWeighted": 0.783036617666,
+        "cIndexWeighted": 0.783036617666,
+        "aurocUnweighted": 0.78472760055,
+        "aurocUnweightedCi": [0.766752144111, 0.802703056989],
+        "averagePrecisionWeighted": 0.390727852263,
+        "brierWeighted": 0.095532883948,
+        "calibrationIntercept": -0.341394772879,
+        "calibrationSlope": 1.075187867145,
+        "top20Threshold": 0.260402619773,
+        "top20Sensitivity": 0.534974141773,
+        "top20Specificity": 0.848101778425,
+        "top20Ppv": 0.338656327565,
+        "top20Npv": 0.926163881249
       },
       "deciles": {
-        "thresholds": [0.035046462232, 0.051378037187, 0.067552077592, 0.090341148918, 0.115441782451, 0.143681985957, 0.186293970092, 0.249934811366, 0.369233400714],
+        "thresholds": [0.035089915329, 0.053691642167, 0.069091840427, 0.094676796541, 0.122262734321, 0.144710538804, 0.180397202638, 0.260402619773, 0.345999899999],
         "stats": [
           {
             "decile": 1,
-            "lowerInclusive": 0.012111923223,
-            "upperInclusive": 0.034926058164,
+            "lowerInclusive": 0.010742859834,
+            "upperInclusive": 0.035089915329,
             "n": 304,
-            "weightedShare": 0.099849884349,
-            "meanPredicted": 0.024632724122,
-            "observedRate": 0.010824833053
+            "weightedShare": 0.100007325462,
+            "meanPredicted": 0.025072793594,
+            "observedRate": 0.010807791564
           },
           {
             "decile": 2,
-            "lowerInclusive": 0.035046462232,
-            "upperInclusive": 0.051378037187,
-            "n": 349,
-            "weightedShare": 0.100162624036,
-            "meanPredicted": 0.043151159843,
-            "observedRate": 0.010413928151
+            "lowerInclusive": 0.035089915329,
+            "upperInclusive": 0.053691642167,
+            "n": 354,
+            "weightedShare": 0.100048642997,
+            "meanPredicted": 0.045392912057,
+            "observedRate": 0.018827926489
           },
           {
             "decile": 3,
-            "lowerInclusive": 0.051440123765,
-            "upperInclusive": 0.067552077592,
-            "n": 332,
-            "weightedShare": 0.099998582706,
-            "meanPredicted": 0.059597769849,
-            "observedRate": 0.023737907924
+            "lowerInclusive": 0.053691642167,
+            "upperInclusive": 0.069091840427,
+            "n": 328,
+            "weightedShare": 0.100328774448,
+            "meanPredicted": 0.063400266486,
+            "observedRate": 0.050269973299
           },
           {
             "decile": 4,
-            "lowerInclusive": 0.067698693253,
-            "upperInclusive": 0.090341148918,
-            "n": 385,
-            "weightedShare": 0.099997289114,
-            "meanPredicted": 0.078928260547,
-            "observedRate": 0.085067204267
+            "lowerInclusive": 0.069292002636,
+            "upperInclusive": 0.094676796541,
+            "n": 430,
+            "weightedShare": 0.099705955441,
+            "meanPredicted": 0.080042421504,
+            "observedRate": 0.060648411909
           },
           {
             "decile": 5,
-            "lowerInclusive": 0.090376842177,
-            "upperInclusive": 0.115377954315,
-            "n": 395,
-            "weightedShare": 0.09997087919,
-            "meanPredicted": 0.103509118129,
-            "observedRate": 0.078203355678
+            "lowerInclusive": 0.094676796541,
+            "upperInclusive": 0.122262734321,
+            "n": 397,
+            "weightedShare": 0.099965358711,
+            "meanPredicted": 0.109268131909,
+            "observedRate": 0.085075427905
           },
           {
             "decile": 6,
-            "lowerInclusive": 0.115441782451,
-            "upperInclusive": 0.143681985957,
-            "n": 375,
-            "weightedShare": 0.100060266699,
-            "meanPredicted": 0.128866385002,
-            "observedRate": 0.101060298933
+            "lowerInclusive": 0.122262734321,
+            "upperInclusive": 0.144710538804,
+            "n": 368,
+            "weightedShare": 0.099949618903,
+            "meanPredicted": 0.134395103213,
+            "observedRate": 0.09933222411
           },
           {
             "decile": 7,
-            "lowerInclusive": 0.143705999879,
-            "upperInclusive": 0.186283653847,
-            "n": 448,
-            "weightedShare": 0.099924223813,
-            "meanPredicted": 0.162673938814,
-            "observedRate": 0.104044857517
+            "lowerInclusive": 0.144710538804,
+            "upperInclusive": 0.180397202638,
+            "n": 426,
+            "weightedShare": 0.099972875061,
+            "meanPredicted": 0.158230659036,
+            "observedRate": 0.098127957888
           },
           {
             "decile": 8,
-            "lowerInclusive": 0.186293970092,
-            "upperInclusive": 0.249767891255,
-            "n": 480,
-            "weightedShare": 0.100009130521,
-            "meanPredicted": 0.216016546311,
-            "observedRate": 0.155085827786
+            "lowerInclusive": 0.180397202638,
+            "upperInclusive": 0.260402619773,
+            "n": 511,
+            "weightedShare": 0.099980679358,
+            "meanPredicted": 0.219331801587,
+            "observedRate": 0.167352704634
           },
           {
             "decile": 9,
-            "lowerInclusive": 0.249934811366,
-            "upperInclusive": 0.368850444077,
-            "n": 552,
-            "weightedShare": 0.099940852971,
-            "meanPredicted": 0.302924004855,
-            "observedRate": 0.233606361207
+            "lowerInclusive": 0.260402619773,
+            "upperInclusive": 0.345999899999,
+            "n": 497,
+            "weightedShare": 0.100032914925,
+            "meanPredicted": 0.290909938866,
+            "observedRate": 0.229338157434
           },
           {
             "decile": 10,
-            "lowerInclusive": 0.369233400714,
-            "upperInclusive": 0.842678431677,
-            "n": 727,
-            "weightedShare": 0.100086266602,
-            "meanPredicted": 0.523766357874,
-            "observedRate": 0.467112728232
+            "lowerInclusive": 0.345999899999,
+            "upperInclusive": 0.798148354453,
+            "n": 732,
+            "weightedShare": 0.100007854694,
+            "meanPredicted": 0.504269053081,
+            "observedRate": 0.449643783384
           }
         ]
       },
@@ -1143,67 +1189,59 @@ window.HSV2_MODELS = {
           "synthetic": true,
           "inputs": {
             "age": 36,
-            "pir": 3,
             "sex": "Male",
             "race_ethnicity": "Non-Hispanic White",
-            "education": "College graduate or above",
-            "partnership": "Married/living with partner"
+            "education": "College graduate or above"
           },
-          "expectedLogit": -2.909973487233,
-          "expectedProbability": 0.051662734409
+          "expectedLogit": -2.952821183441,
+          "expectedProbability": 0.049603343803
         },
         {
           "id": "synthetic_missing",
           "synthetic": true,
           "inputs": {
             "age": null,
-            "pir": null,
             "sex": null,
             "race_ethnicity": null,
-            "education": null,
-            "partnership": null
+            "education": null
           },
-          "expectedLogit": -13.631700020624,
-          "expectedProbability": 1.201787e-06
+          "expectedLogit": -14.038837211599,
+          "expectedProbability": 7.99853e-07
         },
         {
           "id": "synthetic_lower_pattern",
           "synthetic": true,
           "inputs": {
             "age": 23,
-            "pir": 5,
             "sex": "Male",
             "race_ethnicity": "Non-Hispanic White",
-            "education": "College graduate or above",
-            "partnership": "Married/living with partner"
+            "education": "College graduate or above"
           },
-          "expectedLogit": -4.617502495034,
-          "expectedProbability": 0.009780824769
+          "expectedLogit": -4.249137157799,
+          "expectedProbability": 0.014075596094
         },
         {
           "id": "synthetic_higher_pattern",
           "synthetic": true,
           "inputs": {
             "age": 47,
-            "pir": 0.8,
             "sex": "Male",
             "race_ethnicity": "Non-Hispanic Black",
-            "education": "High school/GED",
-            "partnership": "Not partnered"
+            "education": "High school/GED"
           },
-          "expectedLogit": 0.538415857815,
-          "expectedProbability": 0.631443829002
+          "expectedLogit": 0.115033525364,
+          "expectedProbability": 0.528726710635
         }
       ]
     },
     {
       "id": "xgb_model1",
-      "name": "XGBoost Model 1: Baseline",
+      "name": "XGBoost Model 1: Demographic",
       "shortName": "ML Model 1",
       "tier": 1,
       "algorithm": "XGBoost",
       "role": "machine-learning",
-      "description": "Age and broad sociodemographic information.",
+      "description": "Age, sex, race/ethnicity, education, partnership status, and poverty-income ratio.",
       "inputCount": 6,
       "preprocessorId": "tier1",
       "scoring": {

@@ -51,15 +51,15 @@
 
         <figure class="signal-figure" aria-labelledby="signal-title">
           <figcaption id="signal-title">Locked validation discrimination</figcaption>
-          <svg viewBox="0 0 540 270" role="img" aria-label="Weighted AUROC was 0.792 for baseline logistic regression and 0.786, 0.798, 0.798, and 0.813 for XGBoost Models 1 through 4">
+          <svg viewBox="0 0 540 270" role="img" aria-label="Weighted AUROC was 0.783 for the four-variable baseline logistic regression and 0.786, 0.798, 0.798, and 0.813 for XGBoost Models 1 through 4">
             <g class="signal-grid" aria-hidden="true">
               <path d="M48 42H492M48 112H492M48 182H492" />
               <path d="M48 26V214M159 26V214M270 26V214M381 26V214M492 26V214" />
             </g>
-            <path class="signal-bridge" d="M48 149L159 182" />
+            <path class="signal-bridge" d="M48 198L159 182" />
             <path class="signal-line" d="M159 182L270 116L381 116L492 34" />
             <g class="signal-point">
-              <circle class="signal-point-reference" cx="48" cy="149" r="7" /><text x="48" y="130">.792</text>
+              <circle class="signal-point-reference" cx="48" cy="198" r="7" /><text x="48" y="179">.783</text>
               <circle cx="159" cy="182" r="7" /><text x="159" y="163">.786</text>
               <circle cx="270" cy="116" r="7" /><text x="270" y="97">.798</text>
               <circle cx="381" cy="116" r="7" /><text x="381" y="97">.798</text>
@@ -92,7 +92,7 @@
             <p class="step-label">Model selection</p>
             <h2 id="model-heading">Choose the algorithm and information tier.</h2>
           </div>
-          <p>The logistic reference and ML Model 1 use identical baseline inputs. Models 2-4 progressively add lifestyle, clinical, and sensitive information.</p>
+          <p>The logistic reference uses four demographic inputs. ML Model 1 adds partnership and income ratio; Models 2-4 then add lifestyle, clinical, and sensitive information.</p>
         </div>
 
         <fieldset class="tier-rail" id="tierRail">
@@ -103,7 +103,7 @@
               <input type="radio" name="modelChoice" value="baseline_lr" checked />
               <span class="tier-index tier-index-reference">LR</span>
               <strong>Baseline LR</strong>
-              <small>6 inputs / AUROC .792</small>
+              <small>4 inputs / AUROC .783</small>
             </label>
           </div>
           <div class="model-family model-family-machine" role="group" aria-labelledby="machine-family-label">
@@ -139,7 +139,7 @@
 
         <div class="tier-explainer" id="tierExplainer" aria-live="polite">
           <span class="tier-explainer-number">LR</span>
-          <p><strong>Baseline logistic regression</strong> is the transparent reference model. It uses six demographic and socioeconomic inputs.</p>
+          <p><strong>Baseline logistic regression</strong> is the transparent reference model. It uses age, sex, race/ethnicity, and education.</p>
           <span class="burden-label">Reference model</span>
         </div>
       </section>
@@ -149,10 +149,10 @@
           <div class="question-heading">
             <div>
               <p class="step-label">Information entry</p>
-              <h2 id="questionTitle">Baseline information</h2>
+              <h2 id="questionTitle">Four-variable baseline information</h2>
             </div>
             <div class="completion" aria-live="polite">
-              <span id="completionCount">0 of 6</span>
+              <span id="completionCount">0 of 4</span>
               <div class="completion-track" aria-hidden="true"><i id="completionBar"></i></div>
             </div>
           </div>
@@ -235,11 +235,12 @@
       <section class="evidence" id="evidence" aria-labelledby="evidence-title">
         <div class="evidence-title-block">
           <p class="step-label">Model evidence</p>
-          <h2 id="evidence-title">Richer information mattered more than algorithm complexity.</h2>
+          <h2 id="evidence-title">Information burden and algorithm choice must be separated.</h2>
           <p>
-            The weighted logistic baseline is the reference. Four XGBoost models apply machine learning to
-            the nested tiers. XGBoost did not improve discrimination with the same six inputs, while its
-            sensitive-history model achieved its highest weighted AUROC of .813.
+            The weighted logistic baseline uses four variables. XGBoost Model 1 uses six, so its small
+            apparent advantage is not a fixed-information algorithm comparison. In the supplementary
+            tier-matched analysis, six-variable logistic regression remained stronger than XGBoost; the
+            sensitive-history XGBoost model achieved its highest weighted AUROC of .813.
           </p>
         </div>
         <dl class="evidence-stats">

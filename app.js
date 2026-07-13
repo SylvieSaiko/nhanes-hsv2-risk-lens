@@ -27,8 +27,8 @@
       index: "B",
       tier: 1,
       title: "Demographic and social context",
-      description: "These categories reproduce the harmonized NHANES variables used by the baseline model.",
-      badge: "Baseline-LR + ML Model 1",
+      description: "The four-variable baseline uses sex, race/ethnicity, and education here. ML Model 1 additionally requests partnership and income ratio.",
+      badge: "4-variable LR · 6-variable ML1",
       fields: ["sex", "race_ethnicity", "education", "partnership", "pir"]
     },
     {
@@ -65,16 +65,16 @@
     baseline_lr: {
       marker: "REF",
       title: "Baseline logistic model",
-      body: "Uses six demographic and socioeconomic inputs in a transparent weighted logistic regression. It is the reference for judging whether a more complex algorithm helps at fixed information.",
+      body: "Uses age, sex, race/ethnicity, and education in a transparent weighted logistic regression. It deliberately omits partnership status and poverty-income ratio.",
       burden: "Lowest information burden",
-      questionTitle: "Baseline information"
+      questionTitle: "Four-variable baseline information"
     },
     xgb_model1: {
       marker: "ML1",
       title: "ML Model 1 · demographic",
-      body: "Applies XGBoost to exactly the same six inputs as Baseline-LR. This is the clean comparison of algorithmic complexity at fixed information.",
-      burden: "Same inputs as Baseline-LR",
-      questionTitle: "Baseline information"
+      body: "Applies XGBoost to six sociodemographic inputs, adding partnership status and poverty-income ratio to the four-variable logistic benchmark.",
+      burden: "Two inputs beyond Baseline-LR",
+      questionTitle: "Six-variable demographic information"
     },
     xgb_model2: {
       marker: "ML2",
@@ -305,9 +305,17 @@
     return models.find((model) => model.id === selectedModelId);
   }
 
+  function modelInputNames(model) {
+    const preprocessor = preprocessors[model.preprocessorId];
+    if (!preprocessor) return [];
+    return Array.from(new Set([
+      ...Object.keys(preprocessor.numericInputs || {}),
+      ...Object.keys(preprocessor.categoricalInputs || {})
+    ]));
+  }
+
   function activeInputNames() {
-    const inputTier = Number(selectedModel().tier);
-    return Object.keys(inputs).filter((name) => Number(inputs[name].introducedIn) <= inputTier);
+    return modelInputNames(selectedModel());
   }
 
   function readValues() {
@@ -322,6 +330,10 @@
   function updateCircumcisionField() {
     const wrapper = refs.form.querySelector('[data-field="circumcision"]');
     if (!wrapper) return;
+    if (!activeInputNames().includes("circumcision")) {
+      wrapper.hidden = true;
+      return;
+    }
     const notApplicableInput = wrapper.querySelector('input[value="Not applicable (female)"]');
     if (notApplicableInput) notApplicableInput.closest(".choice-option").hidden = true;
     const sex = getValue("sex");
@@ -506,7 +518,7 @@
       const previousResult = index > 0 ? results[index - 1] : null;
       const previous = previousResult ? previousResult.probability : null;
       const comparison = previousResult && previousResult.model.id === "baseline_lr" && result.model.id === "xgb_model1"
-        ? " vs logistic · same inputs"
+        ? " vs four-variable LR · two added inputs"
         : " vs prior ML tier";
       const delta = previous === null ? "Transparent reference model" : `${result.probability - previous >= 0 ? "+" : ""}${((result.probability - previous) * 100).toFixed(1)} percentage points${comparison}`;
       const width = Math.max(2, Math.min(100, (result.probability / scaleMax) * 100));
@@ -592,8 +604,14 @@
       option.classList.toggle("is-selected", selected);
     });
 
+    const activeNames = new Set(activeInputNames());
+    refs.form.querySelectorAll(".field").forEach((field) => {
+      field.hidden = !activeNames.has(field.dataset.field) && field.dataset.field !== "prior_diagnosis";
+    });
     refs.form.querySelectorAll(".form-section").forEach((section) => {
-      section.hidden = Number(section.dataset.tier) > inputTier;
+      const groupId = section.dataset.group;
+      const hasActiveField = Array.from(section.querySelectorAll(".field")).some((field) => !field.hidden);
+      section.hidden = groupId !== "eligibility" && (!hasActiveField || Number(section.dataset.tier) > inputTier);
     });
 
     refs.tierExplainer.innerHTML = `
