@@ -1,20 +1,20 @@
 # HSV-2 Risk Lens
 
-`website_hsv2/` is a static, research-only demonstrator for the four population-weighted logistic-regression information tiers in Attempt 7.
+`website_hsv2/` is a static, research-only demonstrator for the Attempt 7 five-model display: one population-weighted sociodemographic logistic-regression baseline and four weighted XGBoost models across nested information tiers.
 
 ## What it does
 
-- Switches among Model 1 baseline, Model 2 lifestyle/access, Model 3 routine clinical, and Model 4 sensitive-history tiers.
+- Switches among Baseline-LR and XGBoost ML Models 1-4 (demographic, lifestyle/access, routine clinical, and sensitive-history tiers).
 - Preserves shared answers while progressively revealing newly required fields.
-- Calculates the selected tier and every completed lower tier locally in the browser.
-- Shows the unrecalibrated development-fit probability, weighted temporal-validation decile, and within-person tier comparison.
-- Offers the prespecified Model 3-to-Model 4 adaptive-question prompt when its development threshold is crossed.
+- Calculates the selected model and the relevant lower-information comparisons locally in the browser.
+- Shows the unrecalibrated development-fit probability, weighted temporal-validation decile, the matched Baseline-LR versus ML Model 1 comparison, and within-XGBoost tier comparisons.
+- Offers the XGBoost ML Model 3-to-ML Model 4 adaptive-question prompt when its development threshold is crossed.
 
 The site does not diagnose HSV-2 and does not recommend routine serologic screening. It applies only to the study population: U.S. adults aged 20–49 years who explicitly reported no previous clinician diagnosis of genital herpes.
 
 ## Privacy boundary
 
-The page is fully static. It contains no analytics, cookies, browser storage, form submission, or URL-encoded answers. The exported artifact contains only aggregate coefficients, preprocessing constants, validation summaries, and synthetic parity fixtures. It does not contain participant rows, identifiers, survey weights, predictions, fitted model frames, or `.rds` objects.
+The page is fully static. It contains no analytics, cookies, browser storage, form submission, or URL-encoded answers. The exported artifact contains only aggregate logistic coefficients, XGBoost tree structures, preprocessing constants, validation summaries, and synthetic parity fixtures. It does not contain participant rows, identifiers, survey weights, predictions, fitted model frames, or `.rds` objects.
 
 Keep the repository and any deployment private until the investigators authorize publication of the model coefficients.
 
@@ -41,7 +41,7 @@ This writes:
 - `website_hsv2/artifacts/hsv2-models.json`
 - `website_hsv2/model-data.js`
 
-The exporter checks 16 deterministic synthetic parity cases against the fitted R models and rejects unexpected row-level fields before writing either artifact.
+The exporter checks 20 deterministic synthetic parity cases against the fitted R models and rejects unexpected row-level fields before writing either artifact.
 
 Verify the serialized artifact with the independent JavaScript scorer:
 

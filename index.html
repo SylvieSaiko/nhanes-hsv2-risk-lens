@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="A local, research-only HSV-2 seropositivity risk estimator based on four population-weighted NHANES logistic-regression models."
+      content="A local, research-only HSV-2 seropositivity estimator comparing a population-weighted logistic baseline with four NHANES XGBoost models."
     />
     <meta name="theme-color" content="#101d2c" />
     <title>HSV-2 Risk Lens · NHANES research estimator</title>
@@ -36,41 +36,44 @@
     <main id="top">
       <section class="intro" aria-labelledby="page-title">
         <div class="intro-copy">
-          <p class="overline">NHANES 1999–2016 · Research prototype</p>
+          <p class="overline">NHANES 1999-2016 · Research prototype</p>
           <h1 id="page-title">Choose how much information to use.</h1>
           <p class="intro-deck">
-            Compare four population-weighted models—from six baseline questions to a full clinical and
-            sexual-history assessment—and see what each additional information tier changes.
+            Compare one transparent logistic baseline with four XGBoost models, from demographic inputs
+            through sensitive history.
           </p>
           <div class="intro-facts" aria-label="Tool scope">
-            <span>Adults aged 20–49</span>
+            <span>Adults aged 20-49</span>
             <span>No prior genital-herpes diagnosis</span>
             <span>Not a diagnostic test</span>
           </div>
         </div>
 
         <figure class="signal-figure" aria-labelledby="signal-title">
-          <figcaption id="signal-title">Validation discrimination by information tier</figcaption>
-          <svg viewBox="0 0 520 260" role="img" aria-label="AUROC rises from 0.792 at baseline to 0.829 after sensitive history is added">
+          <figcaption id="signal-title">Locked validation discrimination</figcaption>
+          <svg viewBox="0 0 540 270" role="img" aria-label="Weighted AUROC was 0.792 for baseline logistic regression and 0.786, 0.798, 0.798, and 0.813 for XGBoost Models 1 through 4">
             <g class="signal-grid" aria-hidden="true">
-              <path d="M42 46H498M42 112H498M42 178H498" />
-              <path d="M42 28V210M194 28V210M346 28V210M498 28V210" />
+              <path d="M48 42H492M48 112H492M48 182H492" />
+              <path d="M48 26V214M159 26V214M270 26V214M381 26V214M492 26V214" />
             </g>
-            <path class="signal-line" d="M42 172L194 136L346 130L498 61" />
+            <path class="signal-bridge" d="M48 149L159 182" />
+            <path class="signal-line" d="M159 182L270 116L381 116L492 34" />
             <g class="signal-point">
-              <circle cx="42" cy="172" r="7" /><text x="42" y="153">.792</text>
-              <circle cx="194" cy="136" r="7" /><text x="194" y="117">.804</text>
-              <circle cx="346" cy="130" r="7" /><text x="346" y="111">.806</text>
-              <circle class="signal-point-accent" cx="498" cy="61" r="9" /><text class="signal-text-accent" x="498" y="42">.829</text>
+              <circle class="signal-point-reference" cx="48" cy="149" r="7" /><text x="48" y="130">.792</text>
+              <circle cx="159" cy="182" r="7" /><text x="159" y="163">.786</text>
+              <circle cx="270" cy="116" r="7" /><text x="270" y="97">.798</text>
+              <circle cx="381" cy="116" r="7" /><text x="381" y="97">.798</text>
+              <circle class="signal-point-accent" cx="492" cy="34" r="9" /><text class="signal-text-accent" x="492" y="17">.813</text>
             </g>
             <g class="signal-label" aria-hidden="true">
-              <text x="42" y="236">Baseline</text>
-              <text x="194" y="236">Lifestyle</text>
-              <text x="346" y="236">Routine</text>
-              <text x="498" y="236">Sensitive</text>
+              <text x="48" y="238"><tspan x="48">Baseline</tspan><tspan x="48" dy="15">LR</tspan></text>
+              <text x="159" y="238">ML 1</text>
+              <text x="270" y="238">ML 2</text>
+              <text x="381" y="238">ML 3</text>
+              <text x="492" y="238">ML 4</text>
             </g>
           </svg>
-          <p>Weighted AUROC · locked 2013–2016 validation</p>
+          <p>Weighted AUROC · locked 2013-2016 validation</p>
         </figure>
       </section>
 
@@ -78,7 +81,7 @@
         <strong>Research risk estimate only.</strong>
         <span>
           Routine HSV-2 blood screening is not recommended for asymptomatic people. Use this tool to
-          study information burden—not to diagnose infection or decide on testing without a clinician.
+          study information burden, not to diagnose infection or decide on testing without a clinician.
         </span>
         <a href="https://www.cdc.gov/herpes/testing/index.html" target="_blank" rel="noreferrer">CDC testing guidance <span aria-hidden="true">↗</span></a>
       </aside>
@@ -86,44 +89,58 @@
       <section class="model-choice" id="assessment" aria-labelledby="model-heading">
         <div class="section-heading">
           <div>
-            <p class="step-label">01 / Select an information tier</p>
-            <h2 id="model-heading">Start with the smallest useful model.</h2>
+            <p class="step-label">Model selection</p>
+            <h2 id="model-heading">Choose the algorithm and information tier.</h2>
           </div>
-          <p>Changing tiers keeps answers you already entered and reveals only the additional information required.</p>
+          <p>The logistic reference and ML Model 1 use identical baseline inputs. Models 2-4 progressively add lifestyle, clinical, and sensitive information.</p>
         </div>
 
         <fieldset class="tier-rail" id="tierRail">
-          <legend class="sr-only">Choose a model tier</legend>
-          <label class="tier-option is-selected">
-            <input type="radio" name="modelTier" value="1" checked />
-            <span class="tier-index">01</span>
-            <strong>Baseline</strong>
-            <small>6 inputs · AUROC .792</small>
-          </label>
-          <label class="tier-option">
-            <input type="radio" name="modelTier" value="2" />
-            <span class="tier-index">02</span>
-            <strong>Lifestyle + access</strong>
-            <small>11 inputs · AUROC .804</small>
-          </label>
-          <label class="tier-option">
-            <input type="radio" name="modelTier" value="3" />
-            <span class="tier-index">03</span>
-            <strong>Routine clinical</strong>
-            <small>25 inputs · AUROC .806</small>
-          </label>
-          <label class="tier-option">
-            <input type="radio" name="modelTier" value="4" />
-            <span class="tier-index">04</span>
-            <strong>Sensitive history</strong>
-            <small>30 inputs · AUROC .829</small>
-          </label>
+          <legend class="sr-only">Choose one of five prediction models</legend>
+          <div class="model-family model-family-reference" role="group" aria-labelledby="reference-family-label">
+            <span class="model-family-label" id="reference-family-label">Reference</span>
+            <label class="tier-option is-selected" data-model-id="baseline_lr">
+              <input type="radio" name="modelChoice" value="baseline_lr" checked />
+              <span class="tier-index tier-index-reference">LR</span>
+              <strong>Baseline LR</strong>
+              <small>6 inputs / AUROC .792</small>
+            </label>
+          </div>
+          <div class="model-family model-family-machine" role="group" aria-labelledby="machine-family-label">
+            <span class="model-family-label" id="machine-family-label">Machine learning</span>
+            <div class="model-family-options">
+              <label class="tier-option" data-model-id="xgb_model1">
+                <input type="radio" name="modelChoice" value="xgb_model1" />
+                <span class="tier-index">01</span>
+                <strong>ML Model 1</strong>
+                <small>6 inputs / AUROC .786</small>
+              </label>
+              <label class="tier-option" data-model-id="xgb_model2">
+                <input type="radio" name="modelChoice" value="xgb_model2" />
+                <span class="tier-index">02</span>
+                <strong>ML Model 2</strong>
+                <small>11 inputs / AUROC .798</small>
+              </label>
+              <label class="tier-option" data-model-id="xgb_model3">
+                <input type="radio" name="modelChoice" value="xgb_model3" />
+                <span class="tier-index">03</span>
+                <strong>ML Model 3</strong>
+                <small>25 inputs / AUROC .798</small>
+              </label>
+              <label class="tier-option" data-model-id="xgb_model4">
+                <input type="radio" name="modelChoice" value="xgb_model4" />
+                <span class="tier-index">04</span>
+                <strong>ML Model 4</strong>
+                <small>30 inputs / AUROC .813</small>
+              </label>
+            </div>
+          </div>
         </fieldset>
 
         <div class="tier-explainer" id="tierExplainer" aria-live="polite">
-          <span class="tier-explainer-number">01</span>
-          <p><strong>Baseline model</strong> uses demographic and socioeconomic information only. It requires no laboratory values or sexual-history questions.</p>
-          <span class="burden-label">Lowest information burden</span>
+          <span class="tier-explainer-number">LR</span>
+          <p><strong>Baseline logistic regression</strong> is the transparent reference model. It uses six demographic and socioeconomic inputs.</p>
+          <span class="burden-label">Reference model</span>
         </div>
       </section>
 
@@ -131,7 +148,7 @@
         <div class="question-column">
           <div class="question-heading">
             <div>
-              <p class="step-label">02 / Enter information</p>
+              <p class="step-label">Information entry</p>
               <h2 id="questionTitle">Baseline information</h2>
             </div>
             <div class="completion" aria-live="polite">
@@ -163,15 +180,15 @@
           <div class="result-sticky">
             <div class="result-heading-row">
               <div>
-                <p class="step-label">03 / Interpret</p>
+                <p class="step-label">Result</p>
                 <h2 id="result-heading">Research estimate</h2>
               </div>
-              <span class="result-model" id="resultModel">Model 1</span>
+              <span class="result-model" id="resultModel">Baseline LR</span>
             </div>
 
             <div class="result-empty" id="resultEmpty">
               <div class="empty-orbit" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-              <p>Complete the selected tier to see an estimated probability, reference decile, and side-by-side tier comparison.</p>
+              <p>Complete the selected model to see an estimated probability, reference decile, and comparison with other completed models.</p>
             </div>
 
             <div class="result-content" id="resultContent" hidden>
@@ -179,7 +196,7 @@
                 <div class="risk-orbit" id="riskOrbit" aria-hidden="true"><span></span></div>
                 <div class="risk-number">
                   <span>Estimated HSV-2 seropositivity</span>
-                  <strong id="riskValue">—</strong>
+                  <strong id="riskValue">Not calculated</strong>
                   <small>Raw development-fit probability</small>
                 </div>
               </div>
@@ -187,21 +204,21 @@
               <div class="risk-context">
                 <div>
                   <span>Reference position</span>
-                  <strong id="decileValue">—</strong>
+                  <strong id="decileValue">Not calculated</strong>
                 </div>
-                <p id="riskNarrative">—</p>
+                <p id="riskNarrative">Complete the selected model to generate a reference position.</p>
               </div>
 
               <div class="adaptive-note" id="adaptiveNote" hidden>
                 <span>Optional next step</span>
-                <p>The study’s adaptive strategy would request the sensitive-history tier at this level of Model 3 risk.</p>
+                <p>The XGBoost adaptive strategy would request Model 4 sensitive-history questions at this level of Model 3 risk.</p>
                 <button type="button" id="addSensitiveButton">Add sensitive history <span aria-hidden="true">→</span></button>
               </div>
 
               <section class="comparison" aria-labelledby="comparison-title">
                 <div class="comparison-heading">
-                  <h3 id="comparison-title">What added information changed</h3>
-                  <span>Same answers, nested models</span>
+                  <h3 id="comparison-title">Compare available models</h3>
+                  <span>Same answers, model-specific estimates</span>
                 </div>
                 <div class="comparison-rows" id="comparisonRows"></div>
               </section>
@@ -218,16 +235,16 @@
       <section class="evidence" id="evidence" aria-labelledby="evidence-title">
         <div class="evidence-title-block">
           <p class="step-label">Model evidence</p>
-          <h2 id="evidence-title">Information choice mattered more than model complexity.</h2>
+          <h2 id="evidence-title">Richer information mattered more than algorithm complexity.</h2>
           <p>
-            The four tiers use the same population-weighted logistic-regression approach. Routine clinical
-            measurements added little discrimination beyond lifestyle and access information; direct sexual
-            history added the clearest final increment.
+            The weighted logistic baseline is the reference. Four XGBoost models apply machine learning to
+            the nested tiers. XGBoost did not improve discrimination with the same six inputs, while its
+            sensitive-history model achieved its highest weighted AUROC of .813.
           </p>
         </div>
         <dl class="evidence-stats">
-          <div><dt>Development</dt><dd>13,994</dd><small>1999–2012</small></div>
-          <div><dt>Temporal validation</dt><dd>4,347</dd><small>2013–2016</small></div>
+          <div><dt>Development</dt><dd>13,994</dd><small>1999-2012</small></div>
+          <div><dt>Temporal validation</dt><dd>4,347</dd><small>2013-2016</small></div>
           <div><dt>Seropositive events</dt><dd>718</dd><small>validation set</small></div>
           <div><dt>Weighted prevalence</dt><dd>12.7%</dd><small>validation set</small></div>
         </dl>
@@ -249,7 +266,7 @@
           </details>
           <details>
             <summary>It applies only to the study population.</summary>
-            <p>The models were developed among U.S. adults aged 20–49 with no reported prior clinician-diagnosed genital herpes. Public-use adult HSV-2 data ended after 2015–2016, so contemporary transportability remains unknown.</p>
+            <p>The models were developed among U.S. adults aged 20-49 with no reported prior clinician-diagnosed genital herpes. Public-use adult HSV-2 data ended after 2015-2016, so contemporary transportability remains unknown.</p>
           </details>
           <details>
             <summary>Absolute probabilities may be too high in later populations.</summary>
@@ -264,14 +281,14 @@
         <span>HSV-2 Risk Lens</span>
         <p>Research prototype · Attempt 7</p>
       </div>
-      <p>Population-weighted NHANES models · All calculations run locally in the browser.</p>
+      <p>One weighted logistic reference and four XGBoost models · All calculations run locally in the browser.</p>
       <div class="footer-links">
         <a href="https://www.cdc.gov/herpes/testing/index.html" target="_blank" rel="noreferrer">CDC guidance ↗</a>
         <a href="https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/genital-herpes-serologic-screening" target="_blank" rel="noreferrer">USPSTF recommendation ↗</a>
       </div>
     </footer>
 
-    <noscript>This calculator requires JavaScript to run the four local prediction models.</noscript>
+    <noscript>This calculator requires JavaScript to run the five local prediction models.</noscript>
     <script src="./model-data.js"></script>
     <script src="./app.js"></script>
   </body>

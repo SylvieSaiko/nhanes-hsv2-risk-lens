@@ -2,13 +2,15 @@
   "use strict";
 
   const artifact = window.HSV2_MODELS;
-  if (!artifact || !Array.isArray(artifact.models) || artifact.models.length !== 4) {
+  if (!artifact || artifact.schemaVersion !== "2.0.0" || !Array.isArray(artifact.models) || artifact.models.length !== 5) {
     document.body.innerHTML = "<main style='padding:2rem;font-family:sans-serif'><h1>Model artifact unavailable</h1><p>Run the website exporter before opening this page.</p></main>";
     return;
   }
 
-  const models = artifact.models.slice().sort((a, b) => Number(a.tier) - Number(b.tier));
+  const modelOrder = ["baseline_lr", "xgb_model1", "xgb_model2", "xgb_model3", "xgb_model4"];
+  const models = artifact.models.slice().sort((a, b) => modelOrder.indexOf(a.id) - modelOrder.indexOf(b.id));
   const inputs = artifact.inputs;
+  const preprocessors = artifact.preprocessors;
 
   const groupDefinitions = [
     {
@@ -26,7 +28,7 @@
       tier: 1,
       title: "Demographic and social context",
       description: "These categories reproduce the harmonized NHANES variables used by the baseline model.",
-      badge: "Model 1",
+      badge: "Baseline-LR + ML Model 1",
       fields: ["sex", "race_ethnicity", "education", "partnership", "pir"]
     },
     {
@@ -59,27 +61,38 @@
     }
   ];
 
-  const tierCopy = {
-    1: {
-      title: "Baseline model",
-      body: "Uses demographic and socioeconomic information only. It requires no laboratory values or direct sexual-history questions.",
+  const modelCopy = {
+    baseline_lr: {
+      marker: "REF",
+      title: "Baseline logistic model",
+      body: "Uses six demographic and socioeconomic inputs in a transparent weighted logistic regression. It is the reference for judging whether a more complex algorithm helps at fixed information.",
       burden: "Lowest information burden",
       questionTitle: "Baseline information"
     },
-    2: {
-      title: "Lifestyle and access model",
+    xgb_model1: {
+      marker: "ML1",
+      title: "ML Model 1 · demographic",
+      body: "Applies XGBoost to exactly the same six inputs as Baseline-LR. This is the clean comparison of algorithmic complexity at fixed information.",
+      burden: "Same inputs as Baseline-LR",
+      questionTitle: "Baseline information"
+    },
+    xgb_model2: {
+      marker: "ML2",
+      title: "ML Model 2 · lifestyle and access",
       body: "Adds healthcare access, smoking, alcohol, and drug-use history. It still requires no examination or laboratory values.",
       burden: "No laboratory data",
       questionTitle: "Baseline + lifestyle information"
     },
-    3: {
-      title: "Routine clinical model",
+    xgb_model3: {
+      marker: "ML3",
+      title: "ML Model 3 · routine clinical",
       body: "Adds examination and routine laboratory measurements while deliberately omitting direct sexual-history questions.",
       burden: "Sexual-history-sparing",
       questionTitle: "Routine clinical information"
     },
-    4: {
-      title: "Sensitive-history model",
+    xgb_model4: {
+      marker: "ML4",
+      title: "ML Model 4 · sensitive history",
       body: "Adds direct sexual and STI history to the complete clinical model. This tier had the highest temporal-validation discrimination.",
       burden: "Highest information burden",
       questionTitle: "Full clinical + sensitive history"
@@ -156,7 +169,7 @@
     addSensitiveButton: document.getElementById("addSensitiveButton")
   };
 
-  let selectedTier = 1;
+  let selectedModelId = "baseline_lr";
   let lastResults = null;
 
   function escapeHtml(value) {
@@ -289,11 +302,12 @@
   }
 
   function selectedModel() {
-    return models.find((model) => Number(model.tier) === selectedTier);
+    return models.find((model) => model.id === selectedModelId);
   }
 
   function activeInputNames() {
-    return Object.keys(inputs).filter((name) => Number(inputs[name].introducedIn) <= selectedTier);
+    const inputTier = Number(selectedModel().tier);
+    return Object.keys(inputs).filter((name) => Number(inputs[name].introducedIn) <= inputTier);
   }
 
   function readValues() {
@@ -367,10 +381,11 @@
     return true;
   }
 
-  function scoreModel(model, values) {
-    let logit = Number(model.intercept);
+  function scoreLogistic(model, values) {
+    const scoring = model.scoring;
+    let logit = Number(scoring.intercept);
 
-    Object.entries(model.numericCoefficients || {}).forEach(([name, spec]) => {
+    Object.entries(scoring.numericCoefficients || {}).forEach(([name, spec]) => {
       const raw = values[name];
       const missing = raw === "" || raw === null || raw === undefined || !Number.isFinite(Number(raw));
       const value = missing ? Number(spec.median) : Number(raw);
@@ -387,7 +402,7 @@
       });
     });
 
-    Object.entries(model.categoricalContributions || {}).forEach(([name, spec]) => {
+    Object.entries(scoring.categoricalContributions || {}).forEach(([name, spec]) => {
       const selected = values[name] || "Unknown";
       const levels = spec.levels || {};
       const contribution = Object.prototype.hasOwnProperty.call(levels, selected)
@@ -397,6 +412,67 @@
     });
 
     return 1 / (1 + Math.exp(-logit));
+  }
+
+  function encodeXgboostFeatures(model, values) {
+    const preprocessor = preprocessors[model.preprocessorId];
+    if (!preprocessor) throw new Error(`Missing preprocessor ${model.preprocessorId}`);
+    const features = {};
+    (preprocessor.featureNames || []).forEach((name) => { features[name] = 0; });
+
+    Object.entries(preprocessor.numericInputs || {}).forEach(([name, spec]) => {
+      const raw = values[name];
+      const missing = raw === "" || raw === null || raw === undefined || !Number.isFinite(Number(raw));
+      const value = missing ? Number(spec.median) : Number(raw);
+      features[spec.valueFeature] = value;
+      features[spec.missingFeature] = missing ? 1 : 0;
+      (spec.derivedTerms || []).forEach((term) => {
+        let derived = Number(term.median || 0);
+        if (!missing && term.transform && term.transform.type === "centeredSquare") {
+          derived = Math.pow(value - Number(term.transform.center), 2);
+        }
+        features[term.feature] = derived;
+        features[term.missingFeature] = missing ? 1 : 0;
+      });
+    });
+
+    Object.entries(preprocessor.categoricalInputs || {}).forEach(([name, spec]) => {
+      let selected = values[name];
+      if (!selected || !(spec.levels || []).includes(selected)) selected = spec.unknownLevel;
+      const feature = (spec.featureByLevel || {})[selected];
+      if (feature) features[feature] = 1;
+    });
+    return features;
+  }
+
+  function scoreXgboostTree(node, features) {
+    if (Object.prototype.hasOwnProperty.call(node, "leaf")) return Number(node.leaf);
+    const raw = features[node.split];
+    const value = Math.fround(Number(raw));
+    const threshold = Math.fround(Number(node.split_condition));
+    const childId = !Number.isFinite(value)
+      ? Number(node.missing)
+      : value < threshold
+        ? Number(node.yes)
+        : Number(node.no);
+    const child = (node.children || []).find((candidate) => Number(candidate.nodeid) === childId);
+    if (!child) throw new Error(`Missing XGBoost child ${childId}`);
+    return scoreXgboostTree(child, features);
+  }
+
+  function scoreXgboost(model, values) {
+    const features = encodeXgboostFeatures(model, values);
+    const margin = (model.scoring.trees || []).reduce(
+      (sum, tree) => sum + scoreXgboostTree(tree, features),
+      Number(model.scoring.baseMargin)
+    );
+    return 1 / (1 + Math.exp(-margin));
+  }
+
+  function scoreModel(model, values) {
+    if (model.scoring.kind === "logistic") return scoreLogistic(model, values);
+    if (model.scoring.kind === "xgboost") return scoreXgboost(model, values);
+    throw new Error(`Unsupported scoring kind: ${model.scoring.kind}`);
   }
 
   function getDecile(model, probability) {
@@ -427,8 +503,12 @@
     const probabilities = results.map((result) => result.probability);
     const scaleMax = Math.max(0.2, Math.ceil(Math.max.apply(null, probabilities) * 10) / 10);
     refs.comparisonRows.innerHTML = results.map((result, index) => {
-      const previous = index > 0 ? results[index - 1].probability : null;
-      const delta = previous === null ? "Reference tier" : `${result.probability - previous >= 0 ? "+" : ""}${((result.probability - previous) * 100).toFixed(1)} percentage points vs prior tier`;
+      const previousResult = index > 0 ? results[index - 1] : null;
+      const previous = previousResult ? previousResult.probability : null;
+      const comparison = previousResult && previousResult.model.id === "baseline_lr" && result.model.id === "xgb_model1"
+        ? " vs logistic · same inputs"
+        : " vs prior ML tier";
+      const delta = previous === null ? "Transparent reference model" : `${result.probability - previous >= 0 ? "+" : ""}${((result.probability - previous) * 100).toFixed(1)} percentage points${comparison}`;
       const width = Math.max(2, Math.min(100, (result.probability / scaleMax) * 100));
       return `
         <div class="comparison-row">
@@ -450,7 +530,7 @@
 
     refs.resultEmpty.hidden = true;
     refs.resultContent.hidden = false;
-    refs.resultModel.textContent = `Model ${model.tier}`;
+    refs.resultModel.textContent = model.shortName;
     refs.riskValue.textContent = formatPercent(current.probability, 1);
     refs.riskOrbit.style.setProperty("--risk-angle", `${Math.max(1, Math.min(360, current.probability * 360))}deg`);
     refs.decileValue.textContent = `Decile ${decile} / 10`;
@@ -458,7 +538,7 @@
     renderComparison(results);
 
     const adaptive = artifact.metadata.adaptiveThreshold;
-    refs.adaptiveNote.hidden = !(selectedTier === 3 && adaptive && current.probability >= Number(adaptive.developmentGateProbability));
+    refs.adaptiveNote.hidden = !(model.id === "xgb_model3" && adaptive && current.probability >= Number(adaptive.developmentGateProbability));
     refs.resultContent.style.animation = "none";
     void refs.resultContent.offsetWidth;
     refs.resultContent.style.animation = "";
@@ -473,7 +553,7 @@
     refs.resultEmpty.hidden = false;
     refs.resultContent.hidden = true;
     refs.adaptiveNote.hidden = true;
-    refs.resultModel.textContent = `Model ${selectedTier}`;
+    refs.resultModel.textContent = selectedModel().shortName;
   }
 
   function updateEligibilityStop() {
@@ -498,30 +578,31 @@
     refs.completionBar.style.width = `${names.length ? (completed / names.length) * 100 : 0}%`;
   }
 
-  function updateTier(tier, options) {
-    selectedTier = Number(tier);
-    const copy = tierCopy[selectedTier];
+  function updateModel(modelId, options) {
+    selectedModelId = modelId;
     const model = selectedModel();
+    const inputTier = Number(model.tier);
+    const copy = modelCopy[selectedModelId];
     const opts = options || {};
 
     refs.tierRail.querySelectorAll(".tier-option").forEach((option) => {
       const input = option.querySelector("input");
-      const selected = Number(input.value) === selectedTier;
+      const selected = input.value === selectedModelId;
       input.checked = selected;
       option.classList.toggle("is-selected", selected);
     });
 
     refs.form.querySelectorAll(".form-section").forEach((section) => {
-      section.hidden = Number(section.dataset.tier) > selectedTier;
+      section.hidden = Number(section.dataset.tier) > inputTier;
     });
 
     refs.tierExplainer.innerHTML = `
-      <span class="tier-explainer-number">0${selectedTier}</span>
+      <span class="tier-explainer-number">${copy.marker}</span>
       <p><strong>${copy.title}</strong> ${copy.body}</p>
       <span class="burden-label">${copy.burden}</span>
     `;
     refs.questionTitle.textContent = copy.questionTitle;
-    refs.resultModel.textContent = `Model ${model.tier}`;
+    refs.resultModel.textContent = model.shortName;
     clearInvalidState();
     updateCircumcisionField();
     updateCompletion();
@@ -532,14 +613,17 @@
     event.preventDefault();
     if (!validate()) return;
     const values = readValues();
+    const currentModel = selectedModel();
     const results = models
-      .filter((model) => Number(model.tier) <= selectedTier)
+      .filter((model) => model.id === "baseline_lr" || (
+        currentModel.id !== "baseline_lr" && model.algorithm === "XGBoost" && Number(model.tier) <= Number(currentModel.tier)
+      ))
       .map((model) => ({ model, probability: scoreModel(model, values) }));
     showResult(results);
   });
 
   refs.tierRail.addEventListener("change", (event) => {
-    if (event.target.matches('input[name="modelTier"]')) updateTier(event.target.value);
+    if (event.target.matches('input[name="modelChoice"]')) updateModel(event.target.value);
   });
 
   refs.form.addEventListener("change", (event) => {
@@ -563,7 +647,7 @@
   });
 
   refs.exampleButton.addEventListener("click", () => {
-    updateTier(selectedTier);
+    updateModel(selectedModelId);
     Object.entries(exampleValues).forEach(([name, value]) => setValue(name, value));
     updateCircumcisionField();
     updateEligibilityStop();
@@ -574,18 +658,18 @@
   refs.clearButton.addEventListener("click", () => {
     refs.form.reset();
     refs.form.querySelectorAll(".choice-option").forEach((option) => option.classList.remove("is-checked"));
-    updateTier(1);
+    updateModel("baseline_lr");
     updateEligibilityStop();
     window.scrollTo({ top: document.getElementById("assessment").offsetTop - 80, behavior: "smooth" });
   });
 
   refs.addSensitiveButton.addEventListener("click", () => {
-    updateTier(4);
+    updateModel("xgb_model4");
     const sensitiveSection = refs.form.querySelector('[data-group="sensitive"]');
     if (sensitiveSection) sensitiveSection.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   renderForm();
-  updateTier(1);
+  updateModel("baseline_lr");
   updateEligibilityStop();
 })();

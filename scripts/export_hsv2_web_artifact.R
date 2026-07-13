@@ -10,6 +10,9 @@
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
   stop("Package 'jsonlite' is required. Run scripts/install_dependencies.R first.")
 }
+if (!requireNamespace("xgboost", quietly = TRUE)) {
+  stop("Package 'xgboost' is required. Run scripts/install_dependencies.R first.")
+}
 
 options(stringsAsFactors = FALSE)
 
@@ -246,10 +249,11 @@ extract_categorical_contributions <- function(bundle) {
   result
 }
 
-score_exported_model <- function(model, inputs) {
-  eta <- as.numeric(model$intercept)
-  for (variable in names(model$numericCoefficients)) {
-    specification <- model$numericCoefficients[[variable]]
+score_exported_logistic_model <- function(model, inputs) {
+  scoring <- model$scoring
+  eta <- as.numeric(scoring$intercept)
+  for (variable in names(scoring$numericCoefficients)) {
+    specification <- scoring$numericCoefficients[[variable]]
     value <- inputs[[variable]]
     missing <- is.null(value) || length(value) == 0L || is.na(value)
     used_value <- if (missing) as.numeric(specification$median) else as.numeric(value)
@@ -269,8 +273,8 @@ score_exported_model <- function(model, inputs) {
       }
     }
   }
-  for (variable in names(model$categoricalContributions)) {
-    specification <- model$categoricalContributions[[variable]]
+  for (variable in names(scoring$categoricalContributions)) {
+    specification <- scoring$categoricalContributions[[variable]]
     value <- inputs[[variable]]
     if (is.null(value) || length(value) == 0L || is.na(value) ||
         !as.character(value) %in% names(specification$levels)) {
@@ -279,6 +283,71 @@ score_exported_model <- function(model, inputs) {
     eta <- eta + as.numeric(specification$levels[[as.character(value)]])
   }
   list(logit = eta, probability = stats::plogis(eta))
+}
+
+to_float32 <- function(x) {
+  readBin(
+    writeBin(as.numeric(x), raw(), size = 4L),
+    what = "numeric", n = length(x), size = 4L
+  )
+}
+
+find_child_node <- function(node, child_id) {
+  if (is.null(node$children) || length(node$children) == 0L) {
+    stop("XGBoost split node has no children for child id ", child_id, ".")
+  }
+  child_ids <- vapply(node$children, function(child) as.integer(child$nodeid), integer(1))
+  index <- match(as.integer(child_id), child_ids)
+  if (is.na(index)) {
+    stop("Could not find XGBoost child node ", child_id, " below node ", node$nodeid, ".")
+  }
+  node$children[[index]]
+}
+
+score_xgb_tree <- function(node, feature_row) {
+  if (!is.null(node$leaf)) return(as.numeric(node$leaf))
+  split_name <- as.character(node$split)
+  feature_value <- feature_row[[split_name]]
+  if (is.null(feature_value)) feature_value <- NA_real_
+  feature_value <- suppressWarnings(to_float32(feature_value))
+  split_value <- to_float32(node$split_condition)
+  next_id <- if (is.na(feature_value)) {
+    as.integer(node$missing)
+  } else if (feature_value < split_value) {
+    as.integer(node$yes)
+  } else {
+    as.integer(node$no)
+  }
+  score_xgb_tree(find_child_node(node, next_id), feature_row)
+}
+
+score_xgb_trees <- function(trees, feature_row) {
+  sum(vapply(trees, score_xgb_tree, numeric(1), feature_row = feature_row))
+}
+
+align_matrix_columns <- function(matrix, feature_names) {
+  missing_columns <- setdiff(feature_names, colnames(matrix))
+  if (length(missing_columns) > 0L) {
+    matrix <- cbind(
+      matrix,
+      base::matrix(
+        0, nrow = nrow(matrix), ncol = length(missing_columns),
+        dimnames = list(NULL, missing_columns)
+      )
+    )
+  }
+  unexpected_columns <- setdiff(colnames(matrix), feature_names)
+  if (length(unexpected_columns) > 0L) {
+    stop("Preprocessing produced unexpected feature columns: ", paste(unexpected_columns, collapse = ", "))
+  }
+  matrix[, feature_names, drop = FALSE]
+}
+
+make_bundle_matrix <- function(bundle, inputs, feature_names = NULL) {
+  prepared <- apply_preprocessor(case_to_raw_frame(inputs, bundle$prep), bundle$prep)
+  matrix <- make_matrix(prepared)
+  if (!is.null(feature_names)) matrix <- align_matrix_columns(matrix, feature_names)
+  matrix
 }
 
 make_profiles <- function(bundle) {
@@ -342,11 +411,139 @@ make_profiles <- function(bundle) {
   )
 }
 
-make_validation_deciles <- function(bundle, validation_data) {
+export_preprocessor <- function(bundle, preprocessor_id, tier) {
+  prep <- bundle$prep
+  profiles <- make_profiles(bundle)
+  reference_inputs <- profiles$synthetic_reference
+  reference_matrix <- make_bundle_matrix(bundle, reference_inputs)
+  feature_names <- colnames(reference_matrix)
+
+  numeric_inputs <- lapply(setdiff(prep$numeric_vars, "age_squared"), function(variable) {
+    specification <- list(
+      valueFeature = variable,
+      missingFeature = paste0(variable, "_missing"),
+      median = round_number(prep$medians[[variable]])
+    )
+    if (!variable %in% feature_names || !specification$missingFeature %in% feature_names) {
+      stop("Numeric preprocessing features are missing for ", variable, ".")
+    }
+    if (identical(variable, "age") && "age_squared" %in% prep$numeric_vars) {
+      specification$derivedTerms <- list(list(
+        feature = "age_squared",
+        missingFeature = "age_squared_missing",
+        median = round_number(prep$medians[["age_squared"]]),
+        transform = list(type = "centeredSquare", center = 35)
+      ))
+    }
+    specification
+  })
+  names(numeric_inputs) <- setdiff(prep$numeric_vars, "age_squared")
+
+  categorical_inputs <- lapply(prep$categorical_vars, function(variable) {
+    levels <- prep$factor_levels[[variable]]
+    feature_by_level <- list()
+    for (level in levels) {
+      level_inputs <- reference_inputs
+      level_inputs[[variable]] <- level
+      level_matrix <- make_bundle_matrix(bundle, level_inputs, feature_names)
+      changed <- which(abs(level_matrix[1, ] - reference_matrix[1, ]) > 0.5)
+      if (length(changed) > 1L) {
+        stop("Categorical level changed more than one encoded feature for ", variable, "/", level, ".")
+      }
+      if (length(changed) == 1L) {
+        if (level_matrix[1, changed] != 1 || reference_matrix[1, changed] != 0) {
+          stop("Unexpected treatment-contrast encoding for ", variable, "/", level, ".")
+        }
+        feature_by_level[[level]] <- colnames(level_matrix)[changed]
+      }
+    }
+    list(
+      reference = levels[[1]],
+      unknownLevel = "Unknown",
+      levels = unname(levels),
+      featureByLevel = feature_by_level
+    )
+  })
+  names(categorical_inputs) <- prep$categorical_vars
+
+  list(
+    id = preprocessor_id,
+    tier = as.integer(tier),
+    featureNames = unname(feature_names),
+    numericInputs = numeric_inputs,
+    categoricalInputs = categorical_inputs
+  )
+}
+
+encode_exported_features <- function(preprocessor, inputs) {
+  feature_names <- unlist(preprocessor$featureNames, use.names = FALSE)
+  features <- stats::setNames(rep(0, length(feature_names)), feature_names)
+
+  for (variable in names(preprocessor$numericInputs)) {
+    specification <- preprocessor$numericInputs[[variable]]
+    value <- inputs[[variable]]
+    missing <- is.null(value) || length(value) == 0L || is.na(value)
+    used_value <- if (missing) as.numeric(specification$median) else as.numeric(value)
+    features[[specification$valueFeature]] <- used_value
+    features[[specification$missingFeature]] <- as.integer(missing)
+    if (!is.null(specification$derivedTerms)) {
+      for (term in specification$derivedTerms) {
+        derived_value <- if (missing) {
+          as.numeric(term$median)
+        } else if (identical(term$transform$type, "centeredSquare")) {
+          (used_value - as.numeric(term$transform$center))^2
+        } else {
+          stop("Unsupported derived-term transform in exported preprocessor.")
+        }
+        features[[term$feature]] <- derived_value
+        features[[term$missingFeature]] <- as.integer(missing)
+      }
+    }
+  }
+
+  for (variable in names(preprocessor$categoricalInputs)) {
+    specification <- preprocessor$categoricalInputs[[variable]]
+    value <- inputs[[variable]]
+    levels <- unlist(specification$levels, use.names = FALSE)
+    if (is.null(value) || length(value) == 0L || is.na(value) ||
+        !as.character(value) %in% levels) {
+      value <- specification$unknownLevel
+    }
+    feature <- specification$featureByLevel[[as.character(value)]]
+    if (!is.null(feature)) features[[feature]] <- 1
+  }
+  features
+}
+
+score_fitted_xgb_bundle <- function(bundle, inputs, feature_names) {
+  matrix <- make_bundle_matrix(bundle, inputs, feature_names)
+  dmatrix <- xgboost::xgb.DMatrix(matrix)
+  list(
+    logit = unname(as.numeric(stats::predict(bundle$xgb, dmatrix, outputmargin = TRUE))),
+    probability = unname(as.numeric(stats::predict(bundle$xgb, dmatrix)))
+  )
+}
+
+score_exported_xgb_model <- function(model, preprocessors, inputs) {
+  preprocessor <- preprocessors[[model$preprocessorId]]
+  if (is.null(preprocessor)) stop("Missing exported preprocessor ", model$preprocessorId, ".")
+  feature_row <- as.list(encode_exported_features(preprocessor, inputs))
+  margin <- as.numeric(model$scoring$baseMargin) + score_xgb_trees(model$scoring$trees, feature_row)
+  list(logit = margin, probability = stats::plogis(margin))
+}
+
+score_exported_model <- function(model, preprocessors, inputs) {
+  kind <- as.character(model$scoring$kind)
+  if (identical(kind, "logistic")) return(score_exported_logistic_model(model, inputs))
+  if (identical(kind, "xgboost")) return(score_exported_xgb_model(model, preprocessors, inputs))
+  stop("Unsupported exported scoring kind: ", kind)
+}
+
+make_validation_deciles <- function(bundle, validation_data, algorithm_name) {
   predictions <- bundle$predictions
   predictions <- predictions[
     predictions$set == "Temporal validation (2013-2016)" &
-      predictions$algorithm == "Logistic regression",
+      predictions$algorithm == algorithm_name,
     c("SEQN", "prediction", "outcome"),
     drop = FALSE
   ]
@@ -388,13 +585,16 @@ adaptive_table <- utils::read.csv(
   file.path(tables_dir, "table7_adaptive_sensitive_question_gate.csv"),
   check.names = FALSE
 )
+if (!"algorithm" %in% names(adaptive_table)) {
+  stop("Adaptive-gate table must identify the scoring algorithm.")
+}
 analysis_data <- readRDS(file.path(data_dir, "hsv2_no_prior_diagnosis_analysis.rds"))
 validation_data <- analysis_data[analysis_data$cycle_index >= 8, c("SEQN", "pooled_mec_weight"), drop = FALSE]
 
-make_performance <- function(predictor_tier) {
+make_performance <- function(predictor_tier, algorithm_name) {
   row <- performance_table[
     performance_table$predictor_tier == predictor_tier &
-      performance_table$algorithm == "Logistic regression" &
+      performance_table$algorithm == algorithm_name &
       performance_table$set == "Temporal validation (2013-2016)",
     , drop = FALSE
   ]
@@ -420,35 +620,31 @@ make_performance <- function(predictor_tier) {
   )
 }
 
-export_one_model <- function(manifest_row) {
-  bundle <- readRDS(file.path(models_dir, manifest_row$bundle))
-  numeric_coefficients <- extract_numeric_coefficients(bundle)
-  categorical_contributions <- extract_categorical_contributions(bundle)
-  model <- list(
-    id = manifest_row$id,
-    name = manifest_row$name,
-    shortName = manifest_row$shortName,
-    tier = manifest_row$tier,
-    description = manifest_row$description,
-    inputCount = length(numeric_coefficients) + length(categorical_contributions),
-    intercept = round_number(model_coefficients(bundle)[["(Intercept)"]]),
-    numericCoefficients = numeric_coefficients,
-    categoricalContributions = categorical_contributions,
-    medians = as.list(round_number(bundle$prep$medians)),
-    factorLevels = lapply(bundle$prep$factor_levels, unname),
-    performance = make_performance(manifest_row$predictorTier),
-    deciles = make_validation_deciles(bundle, validation_data)
-  )
-
+attach_parity_cases <- function(model, bundle, preprocessors) {
   profiles <- make_profiles(bundle)
+  # JSON tree dumps round leaf values, so accumulated XGBoost margins are
+  # checked to two parts per million; logistic serialization remains tighter.
+  tolerance <- if (identical(model$scoring$kind, "xgboost")) 2e-6 else 5e-9
   model$parityCases <- lapply(names(profiles), function(case_id) {
-    fitted_score <- score_fitted_bundle(bundle, profiles[[case_id]])
-    exported_score <- score_exported_model(model, profiles[[case_id]])
-    if (max(abs(c(
+    fitted_score <- if (identical(model$scoring$kind, "xgboost")) {
+      feature_names <- unlist(
+        preprocessors[[model$preprocessorId]]$featureNames,
+        use.names = FALSE
+      )
+      score_fitted_xgb_bundle(bundle, profiles[[case_id]], feature_names)
+    } else {
+      score_fitted_bundle(bundle, profiles[[case_id]])
+    }
+    exported_score <- score_exported_model(model, preprocessors, profiles[[case_id]])
+    error <- max(abs(c(
       fitted_score$logit - exported_score$logit,
       fitted_score$probability - exported_score$probability
-    ))) > 5e-10) {
-      stop("R-side parity failure before serialization for ", manifest_row$id, "/", case_id)
+    )))
+    if (!is.finite(error) || error > tolerance) {
+      stop(
+        "R-side parity failure before serialization for ", model$id, "/", case_id,
+        ": error=", signif(error, 8)
+      )
     }
     list(
       id = case_id,
@@ -459,6 +655,88 @@ export_one_model <- function(manifest_row) {
     )
   })
   model
+}
+
+export_logistic_baseline <- function(manifest_row, bundle, preprocessors) {
+  numeric_coefficients <- extract_numeric_coefficients(bundle)
+  categorical_contributions <- extract_categorical_contributions(bundle)
+  model <- list(
+    id = "baseline_lr",
+    name = "Baseline logistic model",
+    shortName = "Baseline LR",
+    tier = manifest_row$tier,
+    algorithm = "Population-weighted logistic regression",
+    role = "reference",
+    description = "Reference logistic model using the six baseline demographic and socioeconomic inputs.",
+    inputCount = length(numeric_coefficients) + length(categorical_contributions),
+    preprocessorId = "tier1",
+    scoring = list(
+      kind = "logistic",
+      intercept = round_number(model_coefficients(bundle)[["(Intercept)"]]),
+      numericCoefficients = numeric_coefficients,
+      categoricalContributions = categorical_contributions
+    ),
+    performance = make_performance(manifest_row$predictorTier, "Logistic regression"),
+    deciles = make_validation_deciles(bundle, validation_data, "Logistic regression")
+  )
+  attach_parity_cases(model, bundle, preprocessors)
+}
+
+export_xgb_model <- function(manifest_row, bundle, preprocessors) {
+  preprocessor_id <- paste0("tier", manifest_row$tier)
+  preprocessor <- preprocessors[[preprocessor_id]]
+  feature_names <- unlist(preprocessor$featureNames, use.names = FALSE)
+  dump_text <- xgboost::xgb.dump(bundle$xgb, with_stats = FALSE, dump_format = "json")[[1]]
+  trees <- jsonlite::fromJSON(dump_text, simplifyVector = FALSE)
+  split_features <- unique(unlist(lapply(trees, function(tree) {
+    collect <- function(node) {
+      if (!is.null(node$leaf)) return(character())
+      c(as.character(node$split), unlist(lapply(node$children, collect), use.names = FALSE))
+    }
+    collect(tree)
+  }), use.names = FALSE))
+  unexpected_splits <- setdiff(split_features, feature_names)
+  if (length(unexpected_splits) > 0L) {
+    stop("XGBoost dump refers to unknown features: ", paste(unexpected_splits, collapse = ", "))
+  }
+
+  profiles <- make_profiles(bundle)
+  reference_features <- as.list(encode_exported_features(preprocessor, profiles$synthetic_reference))
+  reference_native <- score_fitted_xgb_bundle(
+    bundle, profiles$synthetic_reference, feature_names
+  )
+  base_margin <- reference_native$logit - score_xgb_trees(trees, reference_features)
+
+  model <- list(
+    id = paste0("xgb_model", manifest_row$tier),
+    name = paste0("XGBoost Model ", manifest_row$tier, ": ", manifest_row$shortName),
+    shortName = paste0("ML Model ", manifest_row$tier),
+    tier = manifest_row$tier,
+    algorithm = "XGBoost",
+    role = "machine-learning",
+    description = manifest_row$description,
+    inputCount = length(preprocessor$numericInputs) + length(preprocessor$categoricalInputs),
+    preprocessorId = preprocessor_id,
+    scoring = list(
+      kind = "xgboost",
+      objective = "binary:logistic",
+      baseMargin = round_number(base_margin),
+      trees = trees
+    ),
+    training = list(
+      bestIteration = as.integer(bundle$xgb_best_iteration),
+      treeCount = length(trees),
+      cycleGroupedCrossValidation = TRUE,
+      parameters = list(
+        evalMetric = "logloss", eta = 0.03, maxDepth = 3L,
+        minChildWeight = 15, subsample = 0.8, colsampleBytree = 0.8,
+        lambda = 1, alpha = 0, seed = 20260712L
+      )
+    ),
+    performance = make_performance(manifest_row$predictorTier, "XGBoost"),
+    deciles = make_validation_deciles(bundle, validation_data, "XGBoost")
+  )
+  attach_parity_cases(model, bundle, preprocessors)
 }
 
 input_metadata <- list(
@@ -494,14 +772,35 @@ input_metadata <- list(
   circumcision = list(label = "Circumcision", group = "Sensitive history", type = "select", introducedIn = 4L, sensitivity = "sensitive")
 )
 
-models <- lapply(model_manifest, export_one_model)
+bundles <- lapply(
+  model_manifest,
+  function(manifest_row) readRDS(file.path(models_dir, manifest_row$bundle))
+)
+names(bundles) <- paste0("tier", seq_along(bundles))
+preprocessors <- lapply(seq_along(model_manifest), function(index) {
+  export_preprocessor(
+    bundles[[index]],
+    preprocessor_id = paste0("tier", index),
+    tier = model_manifest[[index]]$tier
+  )
+})
+names(preprocessors) <- paste0("tier", seq_along(preprocessors))
+
+models <- c(
+  list(export_logistic_baseline(model_manifest[[1]], bundles[[1]], preprocessors)),
+  lapply(seq_along(model_manifest), function(index) {
+    export_xgb_model(model_manifest[[index]], bundles[[index]], preprocessors)
+  })
+)
 
 # Attach factor options to input metadata from the largest tier that contains
 # each input. This avoids duplicating UI labels in the hand-written metadata.
-for (model in rev(models)) {
-  for (variable in names(model$factorLevels)) {
+for (preprocessor in rev(preprocessors)) {
+  for (variable in names(preprocessor$categoricalInputs)) {
     if (is.null(input_metadata[[variable]]$options)) {
-      input_metadata[[variable]]$options <- unname(model$factorLevels[[variable]])
+      input_metadata[[variable]]$options <- unname(
+        unlist(preprocessor$categoricalInputs[[variable]]$levels, use.names = FALSE)
+      )
     }
   }
 }
@@ -518,14 +817,22 @@ validation_row <- performance_table[
     performance_table$set == "Temporal validation (2013-2016)",
   , drop = FALSE
 ]
-adaptive_row <- adaptive_table[which.min(abs(adaptive_table$target_sensitive_question_fraction - 0.7)), , drop = FALSE]
+xgb_adaptive <- adaptive_table[adaptive_table$algorithm == "XGBoost", , drop = FALSE]
+adaptive_row <- xgb_adaptive[
+  which.min(abs(xgb_adaptive$target_sensitive_question_fraction - 0.6)),
+  , drop = FALSE
+]
+if (nrow(adaptive_row) != 1L ||
+    abs(adaptive_row$target_sensitive_question_fraction - 0.6) > 1e-8) {
+  stop("Could not identify the prespecified XGBoost 60% adaptive-gate row.")
+}
 
 artifact <- list(
-  schemaVersion = "1.0.0",
+  schemaVersion = "2.0.0",
   metadata = list(
-    title = "HSV-2 information-tier risk models",
-    artifactVersion = "attempt7-logistic-2026-07",
-    algorithm = "Population-weighted logistic regression",
+    title = "HSV-2 five-model information-tier risk models",
+    artifactVersion = "attempt7-five-model-2026-07",
+    algorithms = c("Population-weighted logistic regression", "XGBoost"),
     outcome = "HSV-2 seropositivity on NHANES serology",
     eligibility = list(
       ageMin = 20L,
@@ -542,7 +849,9 @@ artifact <- list(
     ),
     weighting = "Pooled NHANES Mobile Examination Center weights; fitting and reported validation metrics are population weighted.",
     adaptiveThreshold = list(
-      basedOnModel = "model3",
+      algorithm = "XGBoost",
+      basedOnModel = "xgb_model3",
+      escalationModel = "xgb_model4",
       developmentGateProbability = round_number(adaptive_row$development_gate_threshold),
       targetSensitiveQuestionFraction = round_number(adaptive_row$target_sensitive_question_fraction),
       validationSensitiveQuestionFraction = round_number(adaptive_row$temporal_sensitive_question_fraction),
@@ -554,23 +863,33 @@ artifact <- list(
       rowLevelDataIncluded = FALSE,
       participantIdentifiersIncluded = FALSE,
       modelFramesIncluded = FALSE,
-      contents = "Aggregate coefficients, preprocessing constants, aggregate temporal-validation summaries, and synthetic parity fixtures only."
+      contents = "Aggregate coefficients, XGBoost tree structures, preprocessing constants, aggregate temporal-validation summaries, and synthetic parity fixtures only."
     ),
     parityCaseNotice = "Parity profiles are deterministic synthetic QA fixtures and are not NHANES participants or clinical vignettes."
   ),
   inputs = input_metadata,
+  preprocessors = preprocessors,
   models = models
 )
 
 allowed_model_fields <- c(
-  "id", "name", "shortName", "tier", "description", "inputCount", "intercept",
-  "numericCoefficients", "categoricalContributions", "medians", "factorLevels",
-  "performance", "deciles", "parityCases"
+  "id", "name", "shortName", "tier", "algorithm", "role", "description",
+  "inputCount", "preprocessorId", "scoring", "training", "performance",
+  "deciles", "parityCases"
 )
 for (model in artifact$models) {
   unexpected <- setdiff(names(model), allowed_model_fields)
   if (length(unexpected) > 0L) {
     stop("Privacy whitelist rejected unexpected model fields: ", paste(unexpected, collapse = ", "))
+  }
+}
+allowed_preprocessor_fields <- c(
+  "id", "tier", "featureNames", "numericInputs", "categoricalInputs"
+)
+for (preprocessor in artifact$preprocessors) {
+  unexpected <- setdiff(names(preprocessor), allowed_preprocessor_fields)
+  if (length(unexpected) > 0L) {
+    stop("Privacy whitelist rejected unexpected preprocessor fields: ", paste(unexpected, collapse = ", "))
   }
 }
 
@@ -614,13 +933,18 @@ writeLines(
 round_trip <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 for (model_index in seq_along(round_trip$models)) {
   round_trip_model <- round_trip$models[[model_index]]
+  tolerance <- if (identical(round_trip_model$scoring$kind, "xgboost")) 2e-6 else 5e-9
   for (parity_case in round_trip_model$parityCases) {
-    score <- score_exported_model(round_trip_model, parity_case$inputs)
+    score <- score_exported_model(
+      round_trip_model,
+      round_trip$preprocessors,
+      parity_case$inputs
+    )
     error <- max(abs(c(
       score$logit - as.numeric(parity_case$expectedLogit),
       score$probability - as.numeric(parity_case$expectedProbability)
     )))
-    if (!is.finite(error) || error > 5e-9) {
+    if (!is.finite(error) || error > tolerance) {
       stop("Serialized parity failure for ", round_trip_model$id, "/", parity_case$id)
     }
   }
@@ -629,5 +953,5 @@ for (model_index in seq_along(round_trip$models)) {
 message("Exported browser-safe HSV-2 model artifact:")
 message("- ", normalizePath(json_path))
 message("- ", normalizePath(js_path))
-message("R-side parity: 16/16 deterministic synthetic cases passed.")
+message("R-side parity: 20/20 deterministic synthetic cases passed.")
 message("Privacy audit: no participant rows, identifiers, weights, model frames, or row predictions serialized.")
