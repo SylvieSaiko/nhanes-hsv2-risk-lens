@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="A local, research-only HSV-2 seropositivity estimator comparing a population-weighted logistic baseline with four NHANES XGBoost models."
+      content="A local, research-only HSV-2 seropositivity estimator with five calculators and a matched-tier comparison of population-weighted logistic regression and XGBoost."
     />
     <meta name="theme-color" content="#101d2c" />
     <title>HSV-2 Risk Lens · NHANES research estimator</title>
@@ -39,8 +39,9 @@
           <p class="overline">NHANES 1999-2016 · Research prototype</p>
           <h1 id="page-title">Choose how much information to use.</h1>
           <p class="intro-deck">
-            Compare one transparent logistic baseline with four XGBoost models, from demographic inputs
-            through sensitive history.
+            Explore five on-device calculators. In fair, input-matched validation, logistic
+            regression retained slightly higher weighted AUROC point estimates than XGBoost at every
+            information tier.
           </p>
           <div class="intro-facts" aria-label="Tool scope">
             <span>Adults aged 20-49</span>
@@ -50,30 +51,119 @@
         </div>
 
         <figure class="signal-figure" aria-labelledby="signal-title">
-          <figcaption id="signal-title">Locked validation discrimination</figcaption>
-          <svg viewBox="0 0 540 270" role="img" aria-label="Weighted AUROC was 0.783 for the four-variable baseline logistic regression and 0.786, 0.798, 0.798, and 0.813 for XGBoost Models 1 through 4">
-            <g class="signal-grid" aria-hidden="true">
-              <path d="M48 42H492M48 112H492M48 182H492" />
-              <path d="M48 26V214M159 26V214M270 26V214M381 26V214M492 26V214" />
-            </g>
-            <path class="signal-bridge" d="M48 198L159 182" />
-            <path class="signal-line" d="M159 182L270 116L381 116L492 34" />
-            <g class="signal-point">
-              <circle class="signal-point-reference" cx="48" cy="198" r="7" /><text x="48" y="179">.783</text>
-              <circle cx="159" cy="182" r="7" /><text x="159" y="163">.786</text>
-              <circle cx="270" cy="116" r="7" /><text x="270" y="97">.798</text>
-              <circle cx="381" cy="116" r="7" /><text x="381" y="97">.798</text>
-              <circle class="signal-point-accent" cx="492" cy="34" r="9" /><text class="signal-text-accent" x="492" y="17">.813</text>
-            </g>
-            <g class="signal-label" aria-hidden="true">
-              <text x="48" y="238"><tspan x="48">Baseline</tspan><tspan x="48" dy="15">LR</tspan></text>
-              <text x="159" y="238">ML 1</text>
-              <text x="270" y="238">ML 2</text>
-              <text x="381" y="238">ML 3</text>
-              <text x="492" y="238">ML 4</text>
-            </g>
-          </svg>
-          <p>Weighted AUROC · locked 2013-2016 validation</p>
+          <figcaption>
+            <span id="signal-title">Information–performance frontier</span>
+            <span class="frontier-legend" aria-label="Chart legend">
+              <span><i class="legend-line legend-line-lr" aria-hidden="true"></i>Logistic regression</span>
+              <span><i class="legend-line legend-line-xgb" aria-hidden="true"></i>XGBoost</span>
+              <span class="legend-ci">Bars: 95% CI</span>
+            </span>
+          </figcaption>
+
+          <div class="signal-chart-scroll" role="region" aria-label="Matched-tier weighted AUROC plot; scroll horizontally on small screens">
+            <svg viewBox="0 0 620 275" role="img" aria-labelledby="signal-title signal-description">
+              <desc id="signal-description">
+                Weighted AUROC in locked 2013–2016 temporal validation. At 6, 11, 25, and 30 matched
+                collected inputs, logistic-regression AUROCs were 0.792, 0.804, 0.806, and 0.829; XGBoost
+                AUROCs were 0.786, 0.798, 0.798, and 0.813. Vertical bars show design-based 95%
+                confidence intervals.
+              </desc>
+
+              <g class="signal-grid" aria-hidden="true">
+                <path d="M44 191H574M44 164H574M44 137H574M44 110H574M44 82H574" />
+              </g>
+              <g class="frontier-y-axis" aria-hidden="true">
+                <text x="36" y="195">.76</text>
+                <text x="36" y="168">.78</text>
+                <text x="36" y="141">.80</text>
+                <text x="36" y="114">.82</text>
+                <text x="36" y="86">.84</text>
+                <text class="frontier-y-title" x="13" y="139" transform="rotate(-90 13 139)">Weighted AUROC</text>
+              </g>
+
+              <g class="frontier-ci frontier-ci-lr" aria-hidden="true">
+                <path d="M59 108V187M53 108H65M53 187H65" />
+                <path d="M213 95V168M207 95H219M207 168H219" />
+                <path d="M367 92V165M361 92H373M361 165H373" />
+                <path d="M521 63V131M515 63H527M515 131H527" />
+              </g>
+              <g class="frontier-ci frontier-ci-xgb" aria-hidden="true">
+                <path d="M69 116V197M63 116H75M63 197H75" />
+                <path d="M223 103V175M217 103H229M217 175H229" />
+                <path d="M377 101V178M371 101H383M371 178H383" />
+                <path d="M531 81V157M525 81H537M525 157H537" />
+              </g>
+
+              <path class="frontier-line frontier-line-lr" d="M59 148L213 131L367 129L521 97" />
+              <path class="frontier-line frontier-line-xgb" d="M69 156L223 140L377 140L531 119" />
+
+              <g class="frontier-points frontier-points-lr">
+                <circle cx="59" cy="148" r="6" /><text x="59" y="134">.792</text>
+                <circle cx="213" cy="131" r="6" /><text x="213" y="117">.804</text>
+                <circle cx="367" cy="129" r="6" /><text x="367" y="115">.806</text>
+                <circle cx="521" cy="97" r="6" /><text x="521" y="83">.829</text>
+              </g>
+              <g class="frontier-points frontier-points-xgb">
+                <rect x="64" y="151" width="10" height="10" /><text x="69" y="175">.786</text>
+                <rect x="218" y="135" width="10" height="10" /><text x="223" y="159">.798</text>
+                <rect x="372" y="135" width="10" height="10" /><text x="377" y="159">.798</text>
+                <rect x="526" y="114" width="10" height="10" /><text x="531" y="138">.813</text>
+              </g>
+
+              <g class="frontier-x-axis" aria-hidden="true">
+                <text x="64" y="224"><tspan x="64">Demographics</tspan><tspan class="frontier-count" x="64" dy="15">6 inputs</tspan></text>
+                <text x="218" y="224"><tspan x="218">Lifestyle/access</tspan><tspan class="frontier-count" x="218" dy="15">11 inputs</tspan></text>
+                <text x="372" y="224"><tspan x="372">Routine clinical</tspan><tspan class="frontier-count" x="372" dy="15">25 inputs</tspan></text>
+                <text x="526" y="224"><tspan x="526">Sexual history added</tspan><tspan class="frontier-count" x="526" dy="15">30 inputs</tspan></text>
+                <text class="frontier-x-title" x="309" y="268">Nested information tier →</text>
+              </g>
+            </svg>
+          </div>
+
+          <div class="frontier-ci-grid" aria-label="Weighted AUROC point estimates and 95% confidence intervals by information tier">
+            <div>
+              <strong>Demographics <span>6 inputs</span></strong>
+              <p><b>LR&nbsp; .792</b> <span>.763–.821</span></p>
+              <p><b>XGB&nbsp; .786</b> <span>.756–.815</span></p>
+            </div>
+            <div>
+              <strong>Lifestyle/access <span>11 inputs</span></strong>
+              <p><b>LR&nbsp; .804</b> <span>.777–.831</span></p>
+              <p><b>XGB&nbsp; .798</b> <span>.772–.825</span></p>
+            </div>
+            <div>
+              <strong>Routine clinical <span>25 inputs</span></strong>
+              <p><b>LR&nbsp; .806</b> <span>.779–.833</span></p>
+              <p><b>XGB&nbsp; .798</b> <span>.770–.826</span></p>
+            </div>
+            <div>
+              <strong>Direct sexual history added <span>30 inputs</span></strong>
+              <p><b>LR&nbsp; .829</b> <span>.804–.854</span></p>
+              <p><b>XGB&nbsp; .813</b> <span>.785–.841</span></p>
+            </div>
+          </div>
+
+          <div class="frontier-transition-panel" aria-label="Incremental performance from each added information tier">
+            <div>
+              <span class="frontier-transition-kicker">Demographics → lifestyle</span>
+              <strong>Clear gain</strong>
+              <p><b>LR</b> ΔAUC +.012 · ΔAP +.013 · ΔBrier −.0017</p>
+              <p><b>XGB</b> ΔAUC +.013 · ΔAP +.015 · ΔBrier −.0019</p>
+            </div>
+            <div>
+              <span class="frontier-transition-kicker">Lifestyle → clinical</span>
+              <strong>Near plateau</strong>
+              <p><b>LR</b> ΔAUC +.002 · ΔAP +.009 · ΔBrier −.0003</p>
+              <p><b>XGB</b> ΔAUC −.0004 · ΔAP +.005 · ΔBrier −.0004</p>
+            </div>
+            <div>
+              <span class="frontier-transition-kicker">Clinical → direct sexual history</span>
+              <strong>Modest gain</strong>
+              <p><b>LR</b> ΔAUC +.023 · ΔAP +.025 · ΔBrier −.0022</p>
+              <p><b>XGB</b> ΔAUC +.015 · ΔAP +.020 · ΔBrier −.0017</p>
+            </div>
+          </div>
+          <p class="frontier-note">Locked 2013–2016 validation · identical collected inputs within each tier · burden is an ordinal domain/count proxy · negative ΔBrier indicates improvement</p>
         </figure>
       </section>
 
@@ -90,15 +180,15 @@
         <div class="section-heading">
           <div>
             <p class="step-label">Model selection</p>
-            <h2 id="model-heading">Choose the algorithm and information tier.</h2>
+            <h2 id="model-heading">Choose a calculator and information tier.</h2>
           </div>
-          <p>The logistic reference uses four demographic inputs. ML Model 1 adds partnership and income ratio; Models 2-4 then add lifestyle, clinical, and sensitive information.</p>
+          <p>Five on-device calculators remain available below: a parsimonious four-input logistic reference and four XGBoost tiers. The frontier above compares the algorithms fairly using identical collected inputs.</p>
         </div>
 
         <fieldset class="tier-rail" id="tierRail">
           <legend class="sr-only">Choose one of five prediction models</legend>
           <div class="model-family model-family-reference" role="group" aria-labelledby="reference-family-label">
-            <span class="model-family-label" id="reference-family-label">Reference</span>
+            <span class="model-family-label" id="reference-family-label">Calculator reference</span>
             <label class="tier-option is-selected" data-model-id="baseline_lr">
               <input type="radio" name="modelChoice" value="baseline_lr" checked />
               <span class="tier-index tier-index-reference">LR</span>
@@ -107,30 +197,30 @@
             </label>
           </div>
           <div class="model-family model-family-machine" role="group" aria-labelledby="machine-family-label">
-            <span class="model-family-label" id="machine-family-label">Machine learning</span>
+            <span class="model-family-label" id="machine-family-label">XGBoost calculators</span>
             <div class="model-family-options">
               <label class="tier-option" data-model-id="xgb_model1">
                 <input type="radio" name="modelChoice" value="xgb_model1" />
                 <span class="tier-index">01</span>
-                <strong>ML Model 1</strong>
+                <strong>XGBoost 1</strong>
                 <small>6 inputs / AUROC .786</small>
               </label>
               <label class="tier-option" data-model-id="xgb_model2">
                 <input type="radio" name="modelChoice" value="xgb_model2" />
                 <span class="tier-index">02</span>
-                <strong>ML Model 2</strong>
+                <strong>XGBoost 2</strong>
                 <small>11 inputs / AUROC .798</small>
               </label>
               <label class="tier-option" data-model-id="xgb_model3">
                 <input type="radio" name="modelChoice" value="xgb_model3" />
                 <span class="tier-index">03</span>
-                <strong>ML Model 3</strong>
+                <strong>XGBoost 3</strong>
                 <small>25 inputs / AUROC .798</small>
               </label>
               <label class="tier-option" data-model-id="xgb_model4">
                 <input type="radio" name="modelChoice" value="xgb_model4" />
                 <span class="tier-index">04</span>
-                <strong>ML Model 4</strong>
+                <strong>XGBoost 4</strong>
                 <small>30 inputs / AUROC .813</small>
               </label>
             </div>
@@ -211,8 +301,8 @@
 
               <div class="adaptive-note" id="adaptiveNote" hidden>
                 <span>Optional next step</span>
-                <p>The XGBoost adaptive strategy would request Model 4 sensitive-history questions at this level of Model 3 risk.</p>
-                <button type="button" id="addSensitiveButton">Add sensitive history <span aria-hidden="true">→</span></button>
+                <p>The XGBoost adaptive strategy would request Model 4 direct sexual-history questions at this level of Model 3 risk.</p>
+                <button type="button" id="addSensitiveButton">Add direct sexual history <span aria-hidden="true">→</span></button>
               </div>
 
               <section class="comparison" aria-labelledby="comparison-title">
@@ -235,12 +325,13 @@
       <section class="evidence" id="evidence" aria-labelledby="evidence-title">
         <div class="evidence-title-block">
           <p class="step-label">Model evidence</p>
-          <h2 id="evidence-title">Information burden and algorithm choice must be separated.</h2>
+          <h2 id="evidence-title">Information content moved performance more than algorithmic complexity.</h2>
           <p>
-            The weighted logistic baseline uses four variables. XGBoost Model 1 uses six, so its small
-            apparent advantage is not a fixed-information algorithm comparison. In the supplementary
-            tier-matched analysis, six-variable logistic regression remained stronger than XGBoost; the
-            sensitive-history XGBoost model achieved its highest weighted AUROC of .813.
+            With identical collected inputs at each tier, logistic regression produced higher weighted AUROC
+            point estimates than XGBoost: .792 vs .786, .804 vs .798, .806 vs .798, and .829 vs .813.
+            Lifestyle/access information added useful discrimination, routine clinical measurements added
+            almost none, and direct sexual history added a modest final gain. Paired AUROC intervals excluded
+            zero at Tiers 1, 3, and 4 but narrowly included zero at Tier 2, so we do not claim significance at every tier.
           </p>
         </div>
         <dl class="evidence-stats">
@@ -282,7 +373,7 @@
         <span>HSV-2 Risk Lens</span>
         <p>Research prototype · Attempt 7</p>
       </div>
-      <p>One weighted logistic reference and four XGBoost models · All calculations run locally in the browser.</p>
+      <p>Five on-device calculators · Matched-tier logistic and XGBoost evidence · All calculations run locally in the browser.</p>
       <div class="footer-links">
         <a href="https://www.cdc.gov/herpes/testing/index.html" target="_blank" rel="noreferrer">CDC guidance ↗</a>
         <a href="https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/genital-herpes-serologic-screening" target="_blank" rel="noreferrer">USPSTF recommendation ↗</a>

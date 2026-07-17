@@ -27,8 +27,8 @@
       index: "B",
       tier: 1,
       title: "Demographic and social context",
-      description: "The four-variable baseline uses sex, race/ethnicity, and education here. ML Model 1 additionally requests partnership and income ratio.",
-      badge: "4-variable LR · 6-variable ML1",
+      description: "The parsimonious logistic calculator uses sex, race/ethnicity, and education here. XGBoost Model 1 additionally requests partnership and income ratio.",
+      badge: "4-input LR · 6-input XGB1",
       fields: ["sex", "race_ethnicity", "education", "partnership", "pir"]
     },
     {
@@ -64,38 +64,38 @@
   const modelCopy = {
     baseline_lr: {
       marker: "REF",
-      title: "Baseline logistic model",
-      body: "Uses age, sex, race/ethnicity, and education in a transparent weighted logistic regression. It deliberately omits partnership status and poverty-income ratio.",
+      title: "Four-input logistic calculator",
+      body: "Uses age, sex, race/ethnicity, and education in a transparent weighted logistic regression. This parsimonious calculator is separate from the matched six-input logistic comparator shown in the frontier.",
       burden: "Lowest information burden",
       questionTitle: "Four-variable baseline information"
     },
     xgb_model1: {
-      marker: "ML1",
-      title: "ML Model 1 · demographic",
-      body: "Applies XGBoost to six sociodemographic inputs, adding partnership status and poverty-income ratio to the four-variable logistic benchmark.",
+      marker: "XGB1",
+      title: "XGBoost Model 1 · demographic",
+      body: "Applies XGBoost to six sociodemographic inputs, adding partnership status and poverty-income ratio. Use the matched-tier frontier—not the four-input calculator contrast—to compare algorithms.",
       burden: "Two inputs beyond Baseline-LR",
       questionTitle: "Six-variable demographic information"
     },
     xgb_model2: {
-      marker: "ML2",
-      title: "ML Model 2 · lifestyle and access",
+      marker: "XGB2",
+      title: "XGBoost Model 2 · lifestyle and access",
       body: "Adds healthcare access, smoking, alcohol, and drug-use history. It still requires no examination or laboratory values.",
       burden: "No laboratory data",
       questionTitle: "Baseline + lifestyle information"
     },
     xgb_model3: {
-      marker: "ML3",
-      title: "ML Model 3 · routine clinical",
+      marker: "XGB3",
+      title: "XGBoost Model 3 · routine clinical",
       body: "Adds examination and routine laboratory measurements while deliberately omitting direct sexual-history questions.",
       burden: "Sexual-history-sparing",
       questionTitle: "Routine clinical information"
     },
     xgb_model4: {
-      marker: "ML4",
-      title: "ML Model 4 · sensitive history",
+      marker: "XGB4",
+      title: "XGBoost Model 4 · direct sexual history added",
       body: "Adds direct sexual and STI history to the complete clinical model. This tier had the highest temporal-validation discrimination.",
       burden: "Highest information burden",
-      questionTitle: "Full clinical + sensitive history"
+      questionTitle: "Full clinical + direct sexual history"
     }
   };
 
@@ -519,8 +519,8 @@
       const previous = previousResult ? previousResult.probability : null;
       const comparison = previousResult && previousResult.model.id === "baseline_lr" && result.model.id === "xgb_model1"
         ? " vs four-variable LR · two added inputs"
-        : " vs prior ML tier";
-      const delta = previous === null ? "Transparent reference model" : `${result.probability - previous >= 0 ? "+" : ""}${((result.probability - previous) * 100).toFixed(1)} percentage points${comparison}`;
+        : " vs prior XGBoost tier";
+      const delta = previous === null ? "Transparent reference calculator" : `${result.probability - previous >= 0 ? "+" : ""}${((result.probability - previous) * 100).toFixed(1)} percentage points${comparison}`;
       const width = Math.max(2, Math.min(100, (result.probability / scaleMax) * 100));
       return `
         <div class="comparison-row">
