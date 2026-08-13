@@ -135,7 +135,7 @@
   const exampleValues = {
     prior_diagnosis: "No",
     age: 40,
-    sex: "Male",
+    sex: "Female",
     race_ethnicity: "Non-Hispanic White",
     education: "High school/GED",
     partnership: "Not partnered",
