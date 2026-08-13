@@ -3,9 +3,30 @@
 
   const artifact = window.HSV2_MODELS;
   if (!artifact || artifact.schemaVersion !== "2.0.0" || !Array.isArray(artifact.models) || artifact.models.length !== 5) {
-    document.body.innerHTML = "<main style='padding:2rem;font-family:sans-serif'><h1>Model artifact unavailable</h1><p>Run the website exporter before opening this page.</p></main>";
+    document.body.innerHTML = "<main style='padding:2rem;font-family:Arial,Helvetica,sans-serif'><h1>Model artifact unavailable</h1><p>Run the website exporter before opening this page.</p></main>";
     return;
   }
+  const approvedDirectHistoryInputs = ["age_first_sex_group", "partners_group", "condomless_sex", "prior_other_sti"];
+  const serializedArtifactText = JSON.stringify(artifact);
+  const artifactModel4 = Array.isArray(artifact.models)
+    ? artifact.models.find((model) => model.id === "xgb_model4")
+    : null;
+  const artifactModel4Preprocessor = artifactModel4 && artifact.preprocessors
+    ? artifact.preprocessors[artifactModel4.preprocessorId]
+    : null;
+  const artifactDirectHistoryInputs = artifact.inputs
+    ? Object.keys(artifact.inputs).filter((name) => Number(artifact.inputs[name].introducedIn) === 4)
+    : [];
+  const model4InputNames = artifactModel4Preprocessor
+    ? [...Object.keys(artifactModel4Preprocessor.numericInputs || {}), ...Object.keys(artifactModel4Preprocessor.categoricalInputs || {})]
+    : [];
+  const artifactIsCurrent = artifact.metadata &&
+    artifact.metadata.cohortDefinition === "explicit-sxq260-response" &&
+    artifact.metadata.cohort && Number(artifact.metadata.cohort.totalN) === 19055 &&
+    artifactModel4 && Number(artifactModel4.inputCount) === 29 &&
+    approvedDirectHistoryInputs.length === artifactDirectHistoryInputs.length &&
+    approvedDirectHistoryInputs.every((name) => artifactDirectHistoryInputs.includes(name) && model4InputNames.includes(name)) &&
+    !/circumcision|sxq280/i.test(serializedArtifactText);
 
   const modelOrder = ["baseline_lr", "xgb_model1", "xgb_model2", "xgb_model3", "xgb_model4"];
   const models = artifact.models.slice().sort((a, b) => modelOrder.indexOf(a.id) - modelOrder.indexOf(b.id));
@@ -18,7 +39,7 @@
       index: "A",
       tier: 1,
       title: "Eligibility",
-      description: "The research cohort was restricted before modeling. These answers establish whether the estimate applies.",
+      description: "The revised research cohort included both Yes and No diagnosis-history responses. This item establishes cohort applicability but is never supplied to a prediction model.",
       badge: "Required",
       fields: ["prior_diagnosis", "age"]
     },
@@ -57,7 +78,7 @@
       description: "These questions produced the clearest final improvement. Select a lower tier if direct sexual history is not appropriate to request.",
       badge: "Sensitive · Model 4",
       sensitive: true,
-      fields: ["age_first_sex_group", "partners_group", "condomless_sex", "prior_other_sti", "circumcision"]
+      fields: ["age_first_sex_group", "partners_group", "condomless_sex", "prior_other_sti"]
     }
   ];
 
@@ -108,8 +129,7 @@
     alcohol_drinks_day: { help: "Average number of drinks on days alcohol was consumed; enter 0 for no current drinking." },
     sbp: { label: "Average systolic blood pressure", help: "Use the average of available systolic readings when possible." },
     condomless_sex: { label: "Any sex reported without a condom" },
-    prior_other_sti: { help: "Non-HSV STI history; genital herpes is handled by the eligibility question above." },
-    circumcision: { help: "Shown only when male sex is selected; female participants are coded as not applicable." }
+    prior_other_sti: { help: "Non-HSV STI history. The diagnosis-history eligibility response above is not a model input." }
   };
 
   const exampleValues = {
@@ -142,8 +162,7 @@
     age_first_sex_group: "18 or older",
     partners_group: "2-4",
     condomless_sex: "None reported",
-    prior_other_sti: "No",
-    circumcision: "Circumcised"
+    prior_other_sti: "No"
   };
 
   const refs = {
@@ -181,14 +200,128 @@
       .replace(/'/g, "&#039;");
   }
 
+  function formatMetric(value, digits) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "—";
+    return number.toFixed(digits).replace(/^(-?)0\./, "$1.");
+  }
+
+  function formatDelta(value, digits) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "—";
+    return `${number >= 0 ? "+" : "−"}${formatMetric(Math.abs(number), digits)}`;
+  }
+
+  function renderArtifactEvidence() {
+    const frontier = artifact.metadata && artifact.metadata.matchedTierEvidence;
+    const increments = artifact.metadata && artifact.metadata.matchedIncrementalEvidence;
+    const container = document.getElementById("frontierContent");
+    if (!artifactIsCurrent || !container || !Array.isArray(frontier) || frontier.length !== 8) return;
+
+    const tiers = [1, 2, 3, 4].map((tierNumber) => {
+      const rows = frontier.filter((row) => Number(row.tierNumber) === tierNumber);
+      return {
+        tierNumber,
+        label: rows[0] ? rows[0].informationTier : `Tier ${tierNumber}`,
+        count: rows[0] ? Number(rows[0].predictorCount) : 0,
+        lr: rows.find((row) => row.algorithm === "Logistic regression"),
+        xgb: rows.find((row) => row.algorithm === "XGBoost")
+      };
+    });
+    if (tiers.some((tier) => !tier.lr || !tier.xgb)) return;
+
+    const allBounds = frontier.flatMap((row) => [Number(row.weightedAurocCi[0]), Number(row.weightedAurocCi[1])]);
+    const yMin = Math.max(0.5, Math.floor((Math.min.apply(null, allBounds) - 0.01) * 20) / 20);
+    const yMax = Math.min(1, Math.ceil((Math.max.apply(null, allBounds) + 0.01) * 20) / 20);
+    const plotTop = 36;
+    const plotBottom = 196;
+    const y = (value) => plotBottom - ((Number(value) - yMin) / (yMax - yMin)) * (plotBottom - plotTop);
+    const xs = [70, 220, 370, 520];
+    const ticks = Array.from({ length: 5 }, (_, index) => yMin + ((yMax - yMin) * index) / 4);
+    const linePath = (algorithmKey, offset) => tiers.map((tier, index) => `${index ? "L" : "M"}${xs[index] + offset} ${y(tier[algorithmKey].weightedAuroc).toFixed(1)}`).join("");
+    const ciPaths = (algorithmKey, offset) => tiers.map((tier, index) => {
+      const row = tier[algorithmKey];
+      const x = xs[index] + offset;
+      const top = y(row.weightedAurocCi[1]).toFixed(1);
+      const bottom = y(row.weightedAurocCi[0]).toFixed(1);
+      return `<path d="M${x} ${top}V${bottom}M${x - 6} ${top}H${x + 6}M${x - 6} ${bottom}H${x + 6}" />`;
+    }).join("");
+    const lrPoints = tiers.map((tier, index) => {
+      const cx = xs[index] - 6;
+      const cy = y(tier.lr.weightedAuroc);
+      return `<circle cx="${cx}" cy="${cy.toFixed(1)}" r="6" /><text x="${cx}" y="${(cy - 13).toFixed(1)}">${formatMetric(tier.lr.weightedAuroc, 3)}</text>`;
+    }).join("");
+    const xgbPoints = tiers.map((tier, index) => {
+      const cx = xs[index] + 6;
+      const cy = y(tier.xgb.weightedAuroc);
+      return `<rect x="${cx - 5}" y="${(cy - 5).toFixed(1)}" width="10" height="10" /><text x="${cx}" y="${(cy + 23).toFixed(1)}">${formatMetric(tier.xgb.weightedAuroc, 3)}</text>`;
+    }).join("");
+    const grid = ticks.map((tick) => `<path d="M44 ${y(tick).toFixed(1)}H574" />`).join("");
+    const yLabels = ticks.map((tick) => `<text x="36" y="${(y(tick) + 4).toFixed(1)}">${formatMetric(tick, 2)}</text>`).join("");
+    const xLabels = tiers.map((tier, index) => `<text x="${xs[index]}" y="226"><tspan x="${xs[index]}">${escapeHtml(tier.label)}</tspan><tspan class="frontier-count" x="${xs[index]}" dy="15">${tier.count} inputs</tspan></text>`).join("");
+    const cards = tiers.map((tier) => `
+      <div>
+        <strong>${escapeHtml(tier.label)} <span>${tier.count} inputs</span></strong>
+        <p><b>LR&nbsp; ${formatMetric(tier.lr.weightedAuroc, 3)}</b><span>${formatMetric(tier.lr.weightedAurocCi[0], 3)}–${formatMetric(tier.lr.weightedAurocCi[1], 3)}</span></p>
+        <p><b>XGB&nbsp; ${formatMetric(tier.xgb.weightedAuroc, 3)}</b><span>${formatMetric(tier.xgb.weightedAurocCi[0], 3)}–${formatMetric(tier.xgb.weightedAurocCi[1], 3)}</span></p>
+      </div>`).join("");
+
+    let transitionHtml = "";
+    if (Array.isArray(increments) && increments.length === 6) {
+      transitionHtml = `<div class="frontier-transition-panel" aria-label="Incremental performance from each added information tier">${[1, 2, 3].map((transitionNumber) => {
+        const rows = increments.filter((row) => Number(row.transitionNumber) === transitionNumber);
+        const lr = rows.find((row) => row.algorithm === "Logistic regression");
+        const xgb = rows.find((row) => row.algorithm === "XGBoost");
+        if (!lr || !xgb) return "";
+        return `<div>
+          <span class="frontier-transition-kicker">${escapeHtml(lr.transitionLabel)}</span>
+          <strong>Added tier</strong>
+          <p><b>LR</b> ΔAUC ${formatDelta(lr.deltaAuroc, 3)} · ΔAP ${formatDelta(lr.deltaAveragePrecision, 3)} · ΔBrier ${formatDelta(lr.deltaBrier, 4)}</p>
+          <p><b>XGB</b> ΔAUC ${formatDelta(xgb.deltaAuroc, 3)} · ΔAP ${formatDelta(xgb.deltaAveragePrecision, 3)} · ΔBrier ${formatDelta(xgb.deltaBrier, 4)}</p>
+        </div>`;
+      }).join("")}</div>`;
+    }
+
+    container.innerHTML = `
+      <div class="signal-chart-scroll" role="region" tabindex="0" aria-label="Matched-tier weighted AUROC plot; scroll horizontally on small screens">
+        <svg viewBox="0 0 620 275" role="img" aria-label="Weighted AUROC in 2013–2016 temporal validation for matched logistic regression and XGBoost tiers">
+          <g class="signal-grid" aria-hidden="true">${grid}</g>
+          <g class="frontier-y-axis" aria-hidden="true">${yLabels}<text class="frontier-y-title" x="13" y="139" transform="rotate(-90 13 139)">Weighted AUROC</text></g>
+          <g class="frontier-ci frontier-ci-lr" aria-hidden="true">${ciPaths("lr", -6)}</g>
+          <g class="frontier-ci frontier-ci-xgb" aria-hidden="true">${ciPaths("xgb", 6)}</g>
+          <path class="frontier-line frontier-line-lr" d="${linePath("lr", -6)}" />
+          <path class="frontier-line frontier-line-xgb" d="${linePath("xgb", 6)}" />
+          <g class="frontier-points frontier-points-lr">${lrPoints}</g>
+          <g class="frontier-points frontier-points-xgb">${xgbPoints}</g>
+          <g class="frontier-x-axis" aria-hidden="true">${xLabels}<text class="frontier-x-title" x="309" y="268">Nested information tier →</text></g>
+        </svg>
+      </div>
+      <div class="frontier-ci-grid" aria-label="Weighted AUROC point estimates and 95% confidence intervals by information tier">${cards}</div>
+      ${transitionHtml}
+      <p class="frontier-note">2013–2016 temporal validation · revised explicit-response cohort · identical collected inputs within tiers · negative ΔBrier indicates improvement</p>`;
+
+    models.forEach((model) => {
+      const summary = document.querySelector(`[data-model-summary="${CSS.escape(model.id)}"]`);
+      if (summary) summary.textContent = `${model.inputCount} inputs / AUROC ${formatMetric(model.performance.aurocWeighted, 3)}`;
+    });
+    const cohort = artifact.metadata.cohort;
+    document.getElementById("developmentN").textContent = Number(cohort.development.n).toLocaleString("en-US");
+    document.getElementById("validationN").textContent = Number(cohort.temporalValidation.n).toLocaleString("en-US");
+    document.getElementById("validationEvents").textContent = Number(cohort.temporalValidation.events).toLocaleString("en-US");
+    const lrHigher = tiers.every((tier) => Number(tier.lr.weightedAuroc) >= Number(tier.xgb.weightedAuroc));
+    document.getElementById("evidenceNarrative").textContent = lrHigher
+      ? "With identical collected inputs, logistic regression had equal or higher weighted AUROC at every tier in the revised temporal evaluation. Exact tier estimates and incremental metrics are shown above."
+      : "Algorithm rankings varied across information tiers in the revised temporal evaluation. Exact input-matched estimates and incremental metrics are shown above.";
+  }
+
   function fieldSpec(name) {
     if (name === "prior_diagnosis") {
       return {
         label: "Has a clinician ever diagnosed genital herpes?",
         type: "select",
-        options: ["No", "Yes", "Not sure"],
+        options: ["No", "Yes", "Not sure / prefer not to answer"],
         introducedIn: 1,
-        help: "The primary study excluded prior diagnosis. Select Yes or Not sure to see the appropriate stop message."
+        help: "Both Yes and No were included in the revised primary cohort. This answer is checked only for applicability and never enters the model."
       };
     }
     return Object.assign({}, inputs[name], fieldOverrides[name] || {});
@@ -271,7 +404,6 @@
         ${group.id === "eligibility" ? '<div class="eligibility-stop" id="eligibilityStop" hidden></div>' : ""}
       </section>
     `).join("");
-    updateCircumcisionField();
   }
 
   function getRadioValue(name) {
@@ -327,25 +459,6 @@
     return values;
   }
 
-  function updateCircumcisionField() {
-    const wrapper = refs.form.querySelector('[data-field="circumcision"]');
-    if (!wrapper) return;
-    if (!activeInputNames().includes("circumcision")) {
-      wrapper.hidden = true;
-      return;
-    }
-    const notApplicableInput = wrapper.querySelector('input[value="Not applicable (female)"]');
-    if (notApplicableInput) notApplicableInput.closest(".choice-option").hidden = true;
-    const sex = getValue("sex");
-    if (sex === "Female") {
-      setValue("circumcision", "Not applicable (female)");
-      wrapper.hidden = true;
-    } else {
-      wrapper.hidden = false;
-      if (getValue("circumcision") === "Not applicable (female)") setValue("circumcision", "");
-    }
-  }
-
   function clearInvalidState() {
     refs.form.querySelectorAll(".field.is-invalid").forEach((field) => field.classList.remove("is-invalid"));
     refs.form.querySelectorAll('[aria-invalid="true"]').forEach((control) => control.setAttribute("aria-invalid", "false"));
@@ -362,10 +475,14 @@
   function validate() {
     clearInvalidState();
     const invalid = [];
+    if (!artifactIsCurrent) {
+      refs.formStatus.textContent = "The revised explicit-response models are being regenerated. Estimation is disabled until the updated model artifact passes parity checks.";
+      return false;
+    }
     const priorDiagnosis = getValue("prior_diagnosis");
     if (!priorDiagnosis) invalid.push({ name: "prior_diagnosis", message: "Answer the prior-diagnosis eligibility question." });
-    if (priorDiagnosis && priorDiagnosis !== "No") {
-      invalid.push({ name: "prior_diagnosis", message: "This model was not developed for people with a prior or uncertain clinician diagnosis of genital herpes." });
+    if (priorDiagnosis === "Not sure / prefer not to answer") {
+      invalid.push({ name: "prior_diagnosis", message: "The revised primary cohort required an explicit Yes or No diagnosis-history response." });
     }
 
     activeInputNames().forEach((name) => {
@@ -572,11 +689,11 @@
     const stop = document.getElementById("eligibilityStop");
     const value = getValue("prior_diagnosis");
     if (!stop) return;
-    if (value && value !== "No") {
+    if (value === "Yes" || value === "Not sure / prefer not to answer") {
       stop.hidden = false;
       stop.textContent = value === "Yes"
-        ? "This calculator does not apply after a clinician-diagnosed genital-herpes history. Clinical evaluation—not this research estimate—should guide next steps."
-        : "The study required an explicit report of no prior clinician diagnosis. If diagnosis history is uncertain, clarify it with a clinician before interpreting this model.";
+        ? "Yes was included in the revised primary cohort. The diagnosis response does not enter the model, and this seropositivity estimate does not assess symptoms, recurrence, or treatment needs."
+        : "The revised primary cohort required an explicit Yes or No response. Missing, refused, and uncertain responses were not used to develop these models.";
     } else {
       stop.hidden = true;
       stop.textContent = "";
@@ -622,7 +739,6 @@
     refs.questionTitle.textContent = copy.questionTitle;
     refs.resultModel.textContent = model.shortName;
     clearInvalidState();
-    updateCircumcisionField();
     updateCompletion();
     if (!opts.keepResult) resetResult();
   }
@@ -652,7 +768,6 @@
         input.closest(".choice-option").classList.toggle("is-checked", input.checked);
       });
     }
-    if (event.target.name === "sex") updateCircumcisionField();
     if (event.target.name === "prior_diagnosis") updateEligibilityStop();
     clearInvalidState();
     updateCompletion();
@@ -667,7 +782,6 @@
   refs.exampleButton.addEventListener("click", () => {
     updateModel(selectedModelId);
     Object.entries(exampleValues).forEach(([name, value]) => setValue(name, value));
-    updateCircumcisionField();
     updateEligibilityStop();
     updateCompletion();
     clearInvalidState();
@@ -687,6 +801,7 @@
     if (sensitiveSection) sensitiveSection.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
+  renderArtifactEvidence();
   renderForm();
   updateModel("baseline_lr");
   updateEligibilityStop();

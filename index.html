@@ -7,7 +7,7 @@
       name="description"
       content="A local, research-only HSV-2 seropositivity estimator with five calculators and a matched-tier comparison of population-weighted logistic regression and XGBoost."
     />
-    <meta name="theme-color" content="#101d2c" />
+    <meta name="theme-color" content="#111827" />
     <title>HSV-2 Risk Lens · NHANES research estimator</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
@@ -39,13 +39,13 @@
           <p class="overline">NHANES 1999-2016 · Research prototype</p>
           <h1 id="page-title">Choose how much information to use.</h1>
           <p class="intro-deck">
-            Explore five on-device calculators. In fair, input-matched validation, logistic
-            regression retained slightly higher weighted AUROC point estimates than XGBoost at every
-            information tier.
+            Explore five on-device calculators developed in adults who provided an explicit Yes or No
+            diagnosis-history response. Prior genital-herpes diagnosis is allowed for applicability but
+            is never supplied to a prediction model.
           </p>
           <div class="intro-facts" aria-label="Tool scope">
             <span>Adults aged 20-49</span>
-            <span>No prior genital-herpes diagnosis</span>
+            <span>Prior diagnosis allowed</span>
             <span>Not a diagnostic test</span>
           </div>
         </div>
@@ -60,110 +60,12 @@
             </span>
           </figcaption>
 
-          <div class="signal-chart-scroll" role="region" aria-label="Matched-tier weighted AUROC plot; scroll horizontally on small screens">
-            <svg viewBox="0 0 620 275" role="img" aria-labelledby="signal-title signal-description">
-              <desc id="signal-description">
-                Weighted AUROC in locked 2013–2016 temporal validation. At 6, 11, 25, and 30 matched
-                collected inputs, logistic-regression AUROCs were 0.792, 0.804, 0.806, and 0.829; XGBoost
-                AUROCs were 0.786, 0.798, 0.798, and 0.813. Vertical bars show design-based 95%
-                confidence intervals.
-              </desc>
-
-              <g class="signal-grid" aria-hidden="true">
-                <path d="M44 191H574M44 164H574M44 137H574M44 110H574M44 82H574" />
-              </g>
-              <g class="frontier-y-axis" aria-hidden="true">
-                <text x="36" y="195">.76</text>
-                <text x="36" y="168">.78</text>
-                <text x="36" y="141">.80</text>
-                <text x="36" y="114">.82</text>
-                <text x="36" y="86">.84</text>
-                <text class="frontier-y-title" x="13" y="139" transform="rotate(-90 13 139)">Weighted AUROC</text>
-              </g>
-
-              <g class="frontier-ci frontier-ci-lr" aria-hidden="true">
-                <path d="M59 108V187M53 108H65M53 187H65" />
-                <path d="M213 95V168M207 95H219M207 168H219" />
-                <path d="M367 92V165M361 92H373M361 165H373" />
-                <path d="M521 63V131M515 63H527M515 131H527" />
-              </g>
-              <g class="frontier-ci frontier-ci-xgb" aria-hidden="true">
-                <path d="M69 116V197M63 116H75M63 197H75" />
-                <path d="M223 103V175M217 103H229M217 175H229" />
-                <path d="M377 101V178M371 101H383M371 178H383" />
-                <path d="M531 81V157M525 81H537M525 157H537" />
-              </g>
-
-              <path class="frontier-line frontier-line-lr" d="M59 148L213 131L367 129L521 97" />
-              <path class="frontier-line frontier-line-xgb" d="M69 156L223 140L377 140L531 119" />
-
-              <g class="frontier-points frontier-points-lr">
-                <circle cx="59" cy="148" r="6" /><text x="59" y="134">.792</text>
-                <circle cx="213" cy="131" r="6" /><text x="213" y="117">.804</text>
-                <circle cx="367" cy="129" r="6" /><text x="367" y="115">.806</text>
-                <circle cx="521" cy="97" r="6" /><text x="521" y="83">.829</text>
-              </g>
-              <g class="frontier-points frontier-points-xgb">
-                <rect x="64" y="151" width="10" height="10" /><text x="69" y="175">.786</text>
-                <rect x="218" y="135" width="10" height="10" /><text x="223" y="159">.798</text>
-                <rect x="372" y="135" width="10" height="10" /><text x="377" y="159">.798</text>
-                <rect x="526" y="114" width="10" height="10" /><text x="531" y="138">.813</text>
-              </g>
-
-              <g class="frontier-x-axis" aria-hidden="true">
-                <text x="64" y="224"><tspan x="64">Demographics</tspan><tspan class="frontier-count" x="64" dy="15">6 inputs</tspan></text>
-                <text x="218" y="224"><tspan x="218">Lifestyle/access</tspan><tspan class="frontier-count" x="218" dy="15">11 inputs</tspan></text>
-                <text x="372" y="224"><tspan x="372">Routine clinical</tspan><tspan class="frontier-count" x="372" dy="15">25 inputs</tspan></text>
-                <text x="526" y="224"><tspan x="526">Sexual history added</tspan><tspan class="frontier-count" x="526" dy="15">30 inputs</tspan></text>
-                <text class="frontier-x-title" x="309" y="268">Nested information tier →</text>
-              </g>
-            </svg>
-          </div>
-
-          <div class="frontier-ci-grid" aria-label="Weighted AUROC point estimates and 95% confidence intervals by information tier">
-            <div>
-              <strong>Demographics <span>6 inputs</span></strong>
-              <p><b>LR&nbsp; .792</b> <span>.763–.821</span></p>
-              <p><b>XGB&nbsp; .786</b> <span>.756–.815</span></p>
-            </div>
-            <div>
-              <strong>Lifestyle/access <span>11 inputs</span></strong>
-              <p><b>LR&nbsp; .804</b> <span>.777–.831</span></p>
-              <p><b>XGB&nbsp; .798</b> <span>.772–.825</span></p>
-            </div>
-            <div>
-              <strong>Routine clinical <span>25 inputs</span></strong>
-              <p><b>LR&nbsp; .806</b> <span>.779–.833</span></p>
-              <p><b>XGB&nbsp; .798</b> <span>.770–.826</span></p>
-            </div>
-            <div>
-              <strong>Direct sexual history added <span>30 inputs</span></strong>
-              <p><b>LR&nbsp; .829</b> <span>.804–.854</span></p>
-              <p><b>XGB&nbsp; .813</b> <span>.785–.841</span></p>
+          <div id="frontierContent" aria-live="polite">
+            <div class="frontier-pending">
+              <strong>Revised primary analysis in progress</strong>
+              <p>The information–performance frontier is populated from the checked explicit-response cohort artifact. Logistic regression and XGBoost receive identical inputs within each tier.</p>
             </div>
           </div>
-
-          <div class="frontier-transition-panel" aria-label="Incremental performance from each added information tier">
-            <div>
-              <span class="frontier-transition-kicker">Demographics → lifestyle</span>
-              <strong>Clear gain</strong>
-              <p><b>LR</b> ΔAUC +.012 · ΔAP +.013 · ΔBrier −.0017</p>
-              <p><b>XGB</b> ΔAUC +.013 · ΔAP +.015 · ΔBrier −.0019</p>
-            </div>
-            <div>
-              <span class="frontier-transition-kicker">Lifestyle → clinical</span>
-              <strong>Near plateau</strong>
-              <p><b>LR</b> ΔAUC +.002 · ΔAP +.009 · ΔBrier −.0003</p>
-              <p><b>XGB</b> ΔAUC −.0004 · ΔAP +.005 · ΔBrier −.0004</p>
-            </div>
-            <div>
-              <span class="frontier-transition-kicker">Clinical → direct sexual history</span>
-              <strong>Modest gain</strong>
-              <p><b>LR</b> ΔAUC +.023 · ΔAP +.025 · ΔBrier −.0022</p>
-              <p><b>XGB</b> ΔAUC +.015 · ΔAP +.020 · ΔBrier −.0017</p>
-            </div>
-          </div>
-          <p class="frontier-note">Locked 2013–2016 validation · identical collected inputs within each tier · burden is an ordinal domain/count proxy · negative ΔBrier indicates improvement</p>
         </figure>
       </section>
 
@@ -193,7 +95,7 @@
               <input type="radio" name="modelChoice" value="baseline_lr" checked />
               <span class="tier-index tier-index-reference">LR</span>
               <strong>Baseline LR</strong>
-              <small>4 inputs / AUROC .783</small>
+              <small data-model-summary="baseline_lr">4 inputs / AUROC .776</small>
             </label>
           </div>
           <div class="model-family model-family-machine" role="group" aria-labelledby="machine-family-label">
@@ -203,25 +105,25 @@
                 <input type="radio" name="modelChoice" value="xgb_model1" />
                 <span class="tier-index">01</span>
                 <strong>XGBoost 1</strong>
-                <small>6 inputs / AUROC .786</small>
+                <small data-model-summary="xgb_model1">6 inputs / AUROC .778</small>
               </label>
               <label class="tier-option" data-model-id="xgb_model2">
                 <input type="radio" name="modelChoice" value="xgb_model2" />
                 <span class="tier-index">02</span>
                 <strong>XGBoost 2</strong>
-                <small>11 inputs / AUROC .798</small>
+                <small data-model-summary="xgb_model2">11 inputs / AUROC .790</small>
               </label>
               <label class="tier-option" data-model-id="xgb_model3">
                 <input type="radio" name="modelChoice" value="xgb_model3" />
                 <span class="tier-index">03</span>
                 <strong>XGBoost 3</strong>
-                <small>25 inputs / AUROC .798</small>
+                <small data-model-summary="xgb_model3">25 inputs / AUROC .787</small>
               </label>
               <label class="tier-option" data-model-id="xgb_model4">
                 <input type="radio" name="modelChoice" value="xgb_model4" />
                 <span class="tier-index">04</span>
                 <strong>XGBoost 4</strong>
-                <small>30 inputs / AUROC .813</small>
+                <small data-model-summary="xgb_model4">29 inputs / AUROC .807</small>
               </label>
             </div>
           </div>
@@ -325,20 +227,14 @@
       <section class="evidence" id="evidence" aria-labelledby="evidence-title">
         <div class="evidence-title-block">
           <p class="step-label">Model evidence</p>
-          <h2 id="evidence-title">Information content moved performance more than algorithmic complexity.</h2>
-          <p>
-            With identical collected inputs at each tier, logistic regression produced higher weighted AUROC
-            point estimates than XGBoost: .792 vs .786, .804 vs .798, .806 vs .798, and .829 vs .813.
-            Lifestyle/access information added useful discrimination, routine clinical measurements added
-            almost none, and direct sexual history added a modest final gain. Paired AUROC intervals excluded
-            zero at Tiers 1, 3, and 4 but narrowly included zero at Tier 2, so we do not claim significance at every tier.
-          </p>
+          <h2 id="evidence-title">The revised cohort keeps diagnosis history outside the models.</h2>
+          <p id="evidenceNarrative">Primary performance results will appear after the complete explicit-response pipeline has been rerun and checked. The former no-prior-diagnosis results remain a sensitivity analysis rather than being relabeled as primary evidence.</p>
         </div>
         <dl class="evidence-stats">
-          <div><dt>Development</dt><dd>13,994</dd><small>1999-2012</small></div>
-          <div><dt>Temporal validation</dt><dd>4,347</dd><small>2013-2016</small></div>
-          <div><dt>Seropositive events</dt><dd>718</dd><small>validation set</small></div>
-          <div><dt>Weighted prevalence</dt><dd>12.7%</dd><small>validation set</small></div>
+          <div><dt>Development</dt><dd id="developmentN">14,545</dd><small>1999-2012</small></div>
+          <div><dt>Temporal validation</dt><dd id="validationN">4,510</dd><small>2013-2016</small></div>
+          <div><dt>Seropositive events</dt><dd id="validationEvents">817</dd><small>validation set</small></div>
+          <div><dt>Prior diagnosis included</dt><dd>714</dd><small>SXQ260 = Yes</small></div>
         </dl>
       </section>
 
@@ -358,7 +254,7 @@
           </details>
           <details>
             <summary>It applies only to the study population.</summary>
-            <p>The models were developed among U.S. adults aged 20-49 with no reported prior clinician-diagnosed genital herpes. Public-use adult HSV-2 data ended after 2015-2016, so contemporary transportability remains unknown.</p>
+            <p>The revised models were developed among U.S. adults aged 20-49 with determinate HSV-2 serology and an explicit Yes or No response to the prior-diagnosis question. Both responses were included, but the answer was not a predictor. Missing, refused, and uncertain responses were excluded. Public-use adult HSV-2 data ended after 2015-2016, so contemporary transportability remains unknown.</p>
           </details>
           <details>
             <summary>Absolute probabilities may be too high in later populations.</summary>
