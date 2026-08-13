@@ -114,7 +114,7 @@
     xgb_model4: {
       marker: "XGB4",
       title: "XGBoost Model 4 · direct sexual history added",
-      body: "Adds direct sexual and STI history to the complete clinical model. This tier had the highest temporal-validation discrimination.",
+      body: "Adds direct sexual and STI history to the complete clinical model. This tier had the highest temporal-evaluation discrimination.",
       burden: "Highest information burden",
       questionTitle: "Full clinical + direct sexual history"
     }
@@ -284,7 +284,7 @@
 
     container.innerHTML = `
       <div class="signal-chart-scroll" role="region" tabindex="0" aria-label="Matched-tier weighted AUROC plot; scroll horizontally on small screens">
-        <svg viewBox="0 0 620 275" role="img" aria-label="Weighted AUROC in 2013–2016 temporal validation for matched logistic regression and XGBoost tiers">
+        <svg viewBox="0 0 620 275" role="img" aria-label="Weighted AUROC in the 2013–2016 temporal evaluation for matched logistic regression and XGBoost tiers">
           <g class="signal-grid" aria-hidden="true">${grid}</g>
           <g class="frontier-y-axis" aria-hidden="true">${yLabels}<text class="frontier-y-title" x="13" y="139" transform="rotate(-90 13 139)">Weighted AUROC</text></g>
           <g class="frontier-ci frontier-ci-lr" aria-hidden="true">${ciPaths("lr", -6)}</g>
@@ -298,7 +298,7 @@
       </div>
       <div class="frontier-ci-grid" aria-label="Weighted AUROC point estimates and 95% confidence intervals by information tier">${cards}</div>
       ${transitionHtml}
-      <p class="frontier-note">2013–2016 temporal validation · revised explicit-response cohort · identical collected inputs within tiers · negative ΔBrier indicates improvement</p>`;
+      <p class="frontier-note">2013–2016 temporal evaluation · revised explicit-response cohort · identical collected inputs within tiers · negative ΔBrier indicates improvement</p>`;
 
     models.forEach((model) => {
       const summary = document.querySelector(`[data-model-summary="${CSS.escape(model.id)}"]`);
